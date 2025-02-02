@@ -5,18 +5,18 @@ import zipfile
 from io import BytesIO
 from datetime import datetime
 from openpyxl import load_workbook
-import random
 
 def read_excel_simple(file):
     """
     Lees een Excel-bestand dat mogelijk een foutieve styles.xml bevat.
-    We openen het XLSX-bestand als een zip-archief, vervangen in xl/styles.xml 'biltinId'
-    door 'builtinId', en laden vervolgens het workbook in read-only modus (zonder stijlen).
+    Het bestand wordt als zip-archief geopend, waarbij in xl/styles.xml 'biltinId'
+    wordt vervangen door 'builtinId'. Daarna wordt het workbook in read-only modus
+    ingelezen (zonder stijlen).
     """
     try:
         file_bytes = file.read()
         in_memory_file = BytesIO(file_bytes)
-        # Open als zip-archief en pas styles.xml aan indien nodig
+        # Open het XLSX-bestand als zip-archief en pas styles.xml aan indien nodig
         with zipfile.ZipFile(in_memory_file, 'r') as zin:
             out_buffer = BytesIO()
             with zipfile.ZipFile(out_buffer, 'w') as zout:
@@ -42,60 +42,40 @@ def read_excel_simple(file):
         st.error(f"Fout bij het inlezen van de Excel: {e}")
         return pd.DataFrame()
 
-def filter_stock(stock_file, catalog_file, progress_callback=None):
-    # Lijst met grappige boodschappen
-    messages = [
-        "Bezig met de producten uit te pakken...",
-        "Transporteren van de producten...",
-        "De producten worden gesorteerd...",
-        "Producten tellen als een malle...",
-        "Even een dutje voor de robots...",
-        "Data wordt met precisie verwerkt...",
-        "De voorraad wordt keurig gecontroleerd...",
-        "Producten aan het hergroeperen...",
-        "Creatieve oplossingen worden bedacht...",
-        "Bijna klaar, hou vol!",
-        "Laatste check: alles in de juiste doos!"
-    ]
-    
-    # Stap 1: Inlezen stocklijst
-    if progress_callback:
-        progress_callback(10, random.choice(messages))
+def filter_stock(stock_file, catalog_file):
+    # Stap 1: Inlezen van de stocklijst
     stocklijst_df = read_excel_simple(stock_file)
     if stocklijst_df.empty:
         st.error("De stocklijst is leeg of kan niet worden gelezen. Controleer of het bestand correct is opgeslagen.")
         return pd.DataFrame()
-    
-    # Stap 2: Inlezen catalogus
-    if progress_callback:
-        progress_callback(30, random.choice(messages))
+
+    # Stap 2: Inlezen van de catalogus
     try:
         catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
     except Exception as e:
         st.error(f"Fout bij het inlezen van de catalogus: {e}")
         return pd.DataFrame()
-    
-    # Stap 3: Converteren en filteren van kolommen
-    stocklijst_col = "Code"      # Of "EAN", afhankelijk van jouw data
+
+    # Kolomnamen voor filtering
+    stocklijst_col = "Code"      # Bijvoorbeeld: "Code" of "EAN"
     catalogus_col = "product_sku"
+    
+    # Stap 3: Converteren van de kolommen naar string
     try:
-        if progress_callback:
-            progress_callback(50, random.choice(messages))
         stocklijst_df[stocklijst_col] = stocklijst_df[stocklijst_col].astype(str)
         catalogus_df[catalogus_col] = catalogus_df[catalogus_col].astype(str)
     except KeyError as e:
         st.error(f"Vereiste kolom ontbreekt in de bestanden: {e}")
         return pd.DataFrame()
-    
+
+    # Stap 4: Filteren op rijen die in de catalogus voorkomen
     try:
         filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
     except Exception as e:
         st.error(f"Fout bij het filteren van data: {e}")
         return pd.DataFrame()
-    
-    # Stap 4: Samenvoegen en duplicaat verwijderen
-    if progress_callback:
-        progress_callback(70, random.choice(messages))
+
+    # Stap 5: Samenvoegen en duplicaat verwijderen
     try:
         merged_df = filtered_stocklijst_df.merge(
             catalogus_df[[catalogus_col]],
@@ -103,15 +83,13 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
             right_on=catalogus_col,
             how="left"
         )
-        # Verwijder de extra SKU-kolom (die uit de catalogus komt)
+        # Verwijder de extra SKU-kolom (uit de catalogus)
         merged_df = merged_df.drop(columns=[catalogus_col])
     except Exception as e:
         st.error(f"Fout bij het samenvoegen van data: {e}")
         return pd.DataFrame()
-    
-    # Stap 5: Hernoemen en afronden
-    if progress_callback:
-        progress_callback(90, random.choice(messages))
+
+    # Stap 6: Hernoemen en afronden
     rename_map = {
         "Code": "product_sku",
         "# stock": "product_quantity"
@@ -129,35 +107,33 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
     except Exception as e:
         st.error(f"Fout bij het verwerken van de geëxporteerde data: {e}")
         return pd.DataFrame()
-    
-    if progress_callback:
-        progress_callback(100, "De voorraad is compleet gesorteerd!")
+
     return merged_df
 
 # --- Streamlit UI ---
-st.title("LOE Stocklijst Filter Webapp - Door Maarten Verheyen")
-st.write("Upload je stocklijst en catalogus om de gefilterde stocklijst te genereren.")
 
-stock_file = st.file_uploader("Upload de Stocklijst uit Mercis (Excel)", type=["xls", "xlsx"])
-catalog_file = st.file_uploader("Upload de Catalogus uit KMOShops (CSV)", type=["csv"])
+st.title("LOE Stocklijst Filter Webapp - Door Maarten Verheyen")
+st.write("Upload hieronder je bestanden om de gefilterde stocklijst te genereren.")
+
+# Gebruik twee kolommen voor een duidelijk onderscheid tussen de uploaders
+col1, col2 = st.columns(2)
+
+with col1:
+    st.header("Stocklijst uit Mercis (Excel)")
+    stock_file = st.file_uploader("Upload hier je Stocklijst", type=["xls", "xlsx"])
+
+with col2:
+    st.header("Catalogus uit KMOShops (CSV)")
+    catalog_file = st.file_uploader("Upload hier je Catalogus", type=["csv"])
 
 if stock_file and catalog_file:
     if st.button("Filter Stocklijst"):
-        progress_bar = st.progress(0)
-        message_placeholder = st.empty()
-        
-        def progress_callback(percentage, message):
-            progress_bar.progress(percentage)
-            message_placeholder.text(message)
-        
         with st.spinner("Even geduld, we verwerken de data..."):
-            filtered_df = filter_stock(stock_file, catalog_file, progress_callback)
-            
+            filtered_df = filter_stock(stock_file, catalog_file)
             if not filtered_df.empty:
                 output = io.StringIO()
                 filtered_df.to_csv(output, index=False, sep=';')
                 output.seek(0)
-                
                 current_date = datetime.now().strftime("%Y-%m-%d")
                 st.download_button(
                     label="Download Gefilterde Stocklijst",
