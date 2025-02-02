@@ -63,7 +63,7 @@ def filter_stock(stock_file, catalog_file):
         return pd.DataFrame()
 
     try:
-        # Catalogus inlezen met automatische delimiter detectie
+        # Catalogus inlezen met automatische delimiterdetectie
         catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
     except Exception as e:
         st.error(f"Fout bij het inlezen van de catalogus: {e}")
@@ -85,38 +85,33 @@ def filter_stock(stock_file, catalog_file):
         # Filter: behoud enkel de rijen in de stocklijst die ook in de catalogus voorkomen
         filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
 
-        # Samenvoegen: voeg de catalogus toe met een suffix zodat de kolomnaam niet conflicteert
+        # Samenvoegen: voeg de cataloguskolom toe, zodat we enkel de gefilterde rijen overhouden.
+        # Hierdoor komen er twee kolommen: de originele uit de stocklijst (Code) en de
+        # cataloguskolom (product_sku). We verwijderen vervolgens de cataloguskolom.
         merged_df = filtered_stocklijst_df.merge(
             catalogus_df[[catalogus_col]],
             left_on=stocklijst_col,
             right_on=catalogus_col,
-            how="left",
-            suffixes=('', '_catalog')
+            how="left"
         )
+        # Verwijder de kolom uit de catalogus zodat er maar één SKU-kolom overblijft.
+        merged_df = merged_df.drop(columns=[catalogus_col])
     except Exception as e:
         st.error(f"Fout bij het filteren en samenvoegen van data: {e}")
         return pd.DataFrame()
 
-    # Hernoem kolommen en bewaar enkel de gewenste kolommen
+    # Hernoem kolommen en behoud enkel de gewenste kolommen
     rename_map = {
         "Code": "product_sku",
         "# stock": "product_quantity"
     }
     try:
-        # Controleer eerst of de vereiste kolommen aanwezig zijn
         missing_columns = [col for col in rename_map.keys() if col not in merged_df.columns]
         if missing_columns:
             st.error(f"De volgende vereiste kolommen ontbreken in de stocklijst: {missing_columns}")
             return pd.DataFrame()
 
-        # Hernoem de kolom 'Code' naar 'product_sku'
         merged_df = merged_df.rename(columns=rename_map)
-
-        # Verwijder de extra SKU-kolom uit de catalogus (die nu 'product_sku_catalog' heet)
-        if 'product_sku_catalog' in merged_df.columns:
-            merged_df = merged_df.drop(columns=['product_sku_catalog'])
-        
-        # Behoud enkel de gewenste kolommen
         merged_df = merged_df[["product_sku", "product_quantity"]]
 
         # Zorg dat 'product_quantity' als geheel getal wordt opgeslagen
