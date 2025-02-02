@@ -205,82 +205,53 @@ if st.button("Filter Stocklijst"):
                     catalogus_df_full = pd.read_csv(catalog_file, delimiter=';')
             
             catalogus_df_full['product_sku'] = catalogus_df_full['product_sku'].astype(str)
-            # Gebruik "product_name" als de productnaam; indien niet aanwezig, standaardwaarde "Geen productnaam"
+            
+            # Gebruik "product_name" als de productnaam; als deze niet bestaat, geef een standaardwaarde
             if 'product_name' not in catalogus_df_full.columns:
                 catalogus_df_full['product_name'] = "Geen productnaam"
-            # We nemen ook de kolom product_price mee voor de omzetberekening
-            if 'product_price' not in catalogus_df_full.columns:
-                st.error("De kolom 'product_price' ontbreekt in de catalogus.")
-            else:
-                # Zorg ervoor dat product_price numeriek is
-                catalogus_df_full['product_price'] = pd.to_numeric(catalogus_df_full['product_price'], errors='coerce').fillna(0)
-
+            
             # Maak een kopie van de export en hernoem de stocklijsthoeveelheid naar 'Nieuw aantal'
             filtered_export = filtered_df.copy().rename(columns={'product_quantity': 'Nieuw aantal'})
             
-            # Voeg de catalogus-informatie toe: gebruik "product_name" als "Productnaam", 
-            # "product_quantity" als "Vorig aantal" en neem "product_price" mee.
+            # Voeg de catalogus-informatie toe: gebruik "product_name" als "Productnaam" en "product_quantity" als "Vorig aantal"
             diff_df = pd.merge(filtered_export, 
-                               catalogus_df_full[['product_sku', 'product_name', 'product_quantity', 'product_price']], 
+                               catalogus_df_full[['product_sku', 'product_name', 'product_quantity']], 
                                on='product_sku', how='left')
-            diff_df = diff_df.rename(columns={'product_quantity': 'Vorig aantal', 
-                                              'product_name': 'Productnaam'})
+            diff_df = diff_df.rename(columns={'product_quantity': 'Vorig aantal', 'product_name': 'Productnaam'})
+            
             # Zorg ervoor dat 'Vorig aantal' een geheel getal is
             diff_df['Vorig aantal'] = pd.to_numeric(diff_df['Vorig aantal'], errors='coerce').fillna(0).astype(int)
             
             # Bereken het verschil: (Nieuw aantal - Vorig aantal)
             diff_df['Verschil'] = diff_df['Nieuw aantal'] - diff_df['Vorig aantal']
-            # Bereken de omzet: voor negatieve verschillen (verloren voorraad) is omzet = (-Verschil) * product_price
-            diff_df['omzet'] = diff_df.apply(lambda row: (-row['Verschil'] * row['product_price']) if row['Verschil'] < 0 else 0, axis=1)
             # Houd enkel producten met een verschil
             diff_df = diff_df[diff_df['Verschil'] != 0]
-            # Behoud de gewenste kolommen in de volgorde
-            diff_df = diff_df[['Productnaam', 'Vorig aantal', 'Nieuw aantal', 'Verschil', 'omzet']]
+            diff_df = diff_df[['Productnaam', 'Vorig aantal', 'Nieuw aantal', 'Verschil']]
             
             if not diff_df.empty:
-                # --- Paginering ---
-                # Als er meer dan 30 rijen zijn, splits het overzicht op in pagina's van 30
-                if 'diff_page' not in st.session_state:
-                    st.session_state.diff_page = 0
-                per_page = 30
-                total_rows = len(diff_df)
-                total_pages = (total_rows - 1) // per_page + 1
-                start_idx = st.session_state.diff_page * per_page
-                end_idx = start_idx + per_page
-                diff_page = diff_df.iloc[start_idx:end_idx]
-
-                # Functie voor rij-opmaak: kleur de hele rij afhankelijk van het verschil
-                def row_style(row):
-                    if row['Verschil'] < 0:
-                        return ['background-color: lightgreen'] * len(row)
-                    elif row['Verschil'] > 0:
-                        return ['background-color: lightcoral'] * len(row)
-                    else:
-                        return [''] * len(row)
-                
-                styled_diff = diff_page.style.apply(row_style, axis=1)
-                # Centreer de gehele tabel met behulp van CSS
-                table_html = styled_diff.to_html()
-                st.markdown(f"<div style='display: flex; justify-content: center;'>{table_html}</div>", unsafe_allow_html=True)
-                
-                # Toon een centrale titel voor het overzicht
+                # Zet de titel gecentreerd
                 st.markdown("<h3 style='text-align: center;'>Overzicht van verschillen</h3>", unsafe_allow_html=True)
                 
-                # Navigatieknoppen voor paginering, gecentreerd
-                nav_cols = st.columns(3)
-                if st.session_state.diff_page > 0:
-                    if nav_cols[0].button("Vorige 30"):
-                        st.session_state.diff_page -= 1
-                        st.experimental_rerun()
-                else:
-                    nav_cols[0].empty()
-                nav_cols[1].markdown(f"<div style='text-align: center;'>Pagina {st.session_state.diff_page + 1} van {total_pages}</div>", unsafe_allow_html=True)
-                if end_idx < total_rows:
-                    if nav_cols[2].button("Volgende 30"):
-                        st.session_state.diff_page += 1
-                        st.experimental_rerun()
-                else:
-                    nav_cols[2].empty()
+                # Definieer een functie die per rij de achtergrondkleur teruggeeft
+                def color_row(row):
+                    diff = row['Verschil']
+                    # Kies een lichte kleur voor de achtergrond
+                    if diff > 0:
+                        bg = "background-color: #d4edda;"  # lichtgroen
+                    elif diff < 0:
+                        bg = "background-color: #f8d7da;"  # lichtrood
+                    else:
+                        bg = ""
+                    # Voor elke kolom, als het de 'Verschil'-kolom is, voeg dan ook vet toe
+                    return [bg + (" font-weight: bold;" if col == 'Verschil' else "") for col in row.index]
+                
+                styled_diff = diff_df.style.apply(color_row, axis=1)
+                # Centreer de gehele tabel via table styles
+                styled_diff = styled_diff.set_table_styles(
+                    [{'selector': 'table', 'props': [('margin-left', 'auto'), ('margin-right', 'auto')]}]
+                )
+                table_html = styled_diff.to_html()
+                st.markdown(table_html, unsafe_allow_html=True)
             else:
                 st.info("Geen verschillen gevonden tussen de catalogus en de stocklijst.")
         except Exception as e:
