@@ -10,9 +10,6 @@ def filter_stock(stock_file, catalog_file):
     # Catalogus inlezen met automatische delimiter detectie
     catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
     
-    # Controleer beschikbare kolommen in de stocklijst
-    st.write("Beschikbare kolommen in stocklijst:", stocklijst_df.columns.tolist())
-    
     # Kolommen identificeren voor filtering
     stocklijst_col = "Code"  # Alternatief: "EAN"
     catalogus_col = "product_sku"
