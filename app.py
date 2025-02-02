@@ -212,6 +212,8 @@ if st.button("Filter Stocklijst"):
         
         # --- Overzicht van Verschillen ---
         try:
+            # Reset de pointer van catalog_file voordat we deze opnieuw inlezen
+            catalog_file.seek(0)
             # Probeer eerst de catalogus in te lezen met automatische delimiter detectie
             try:
                 catalogus_df_full = pd.read_csv(catalog_file, sep=None, engine="python")
