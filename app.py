@@ -6,6 +6,50 @@ from io import BytesIO
 from datetime import datetime
 from openpyxl import load_workbook
 
+# --- Pagina-configuratie en aangepaste CSS ---
+st.set_page_config(page_title="LOE Stocklijst Filter", page_icon=":package:", layout="wide")
+
+st.markdown("""
+    <style>
+    /* Achtergrondkleur voor de hele pagina */
+    .reportview-container {
+        background: #f0f2f6;
+    }
+    /* Sidebar styling */
+    .sidebar .sidebar-content {
+        background: #ffffff;
+    }
+    /* Banner en header styling */
+    .header-banner {
+        text-align: center;
+        padding: 20px 0;
+    }
+    .header-banner h1 {
+        font-size: 3em;
+        color: #333333;
+        margin: 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- Banner ---
+# (Gebruik een eigen afbeelding door de URL aan te passen)
+st.image("https://via.placeholder.com/1200x300?text=LOE+Stocklijst+Filter", use_column_width=True)
+st.markdown("<div class='header-banner'><h1>LOE Stocklijst Filter Webapp</h1></div>", unsafe_allow_html=True)
+
+# --- Sidebar met instructies ---
+st.sidebar.title("Instructies")
+st.sidebar.info(
+    """
+    **Stap 1:** Upload de *Stocklijst uit Mercis (Excel)* in de linkerkolom.  
+    **Stap 2:** Upload de *Catalogus uit KMOShops (CSV)* in de rechterkolom.  
+    **Stap 3:** Klik op **Filter Stocklijst** om de verwerking te starten.  
+    **Stap 4:** Download de gefilterde stocklijst zodra de verwerking voltooid is.
+    """
+)
+
+# --- Functies voor het inlezen en verwerken van de data ---
+
 def read_excel_simple(file):
     """
     Lees een Excel-bestand dat mogelijk een foutieve styles.xml bevat.
@@ -16,7 +60,6 @@ def read_excel_simple(file):
     try:
         file_bytes = file.read()
         in_memory_file = BytesIO(file_bytes)
-        # Open het XLSX-bestand als zip-archief en pas styles.xml aan indien nodig
         with zipfile.ZipFile(in_memory_file, 'r') as zin:
             out_buffer = BytesIO()
             with zipfile.ZipFile(out_buffer, 'w') as zout:
@@ -28,12 +71,10 @@ def read_excel_simple(file):
             out_buffer.seek(0)
         wb = load_workbook(out_buffer, read_only=True, data_only=True)
         ws = wb.active
-
         data = list(ws.values)
         if not data:
             st.error("Het Excel-bestand bevat geen data.")
             return pd.DataFrame()
-
         header = data[0]
         values = data[1:]
         df = pd.DataFrame(values, columns=header)
@@ -42,14 +83,18 @@ def read_excel_simple(file):
         st.error(f"Fout bij het inlezen van de Excel: {e}")
         return pd.DataFrame()
 
-def filter_stock(stock_file, catalog_file):
+def filter_stock(stock_file, catalog_file, progress_callback=None):
     # Stap 1: Inlezen van de stocklijst
+    if progress_callback:
+        progress_callback(10)
     stocklijst_df = read_excel_simple(stock_file)
     if stocklijst_df.empty:
         st.error("De stocklijst is leeg of kan niet worden gelezen. Controleer of het bestand correct is opgeslagen.")
         return pd.DataFrame()
 
     # Stap 2: Inlezen van de catalogus
+    if progress_callback:
+        progress_callback(30)
     try:
         catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
     except Exception as e:
@@ -57,10 +102,12 @@ def filter_stock(stock_file, catalog_file):
         return pd.DataFrame()
 
     # Kolomnamen voor filtering
-    stocklijst_col = "Code"      # Bijvoorbeeld: "Code" of "EAN"
+    stocklijst_col = "Code"      # Bijvoorbeeld: "Code" (of "EAN")
     catalogus_col = "product_sku"
     
-    # Stap 3: Converteren van de kolommen naar string
+    # Stap 3: Converteren van kolommen naar string
+    if progress_callback:
+        progress_callback(50)
     try:
         stocklijst_df[stocklijst_col] = stocklijst_df[stocklijst_col].astype(str)
         catalogus_df[catalogus_col] = catalogus_df[catalogus_col].astype(str)
@@ -68,7 +115,7 @@ def filter_stock(stock_file, catalog_file):
         st.error(f"Vereiste kolom ontbreekt in de bestanden: {e}")
         return pd.DataFrame()
 
-    # Stap 4: Filteren op rijen die in de catalogus voorkomen
+    # Stap 4: Filteren van de stocklijst op basis van de catalogus
     try:
         filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
     except Exception as e:
@@ -76,6 +123,8 @@ def filter_stock(stock_file, catalog_file):
         return pd.DataFrame()
 
     # Stap 5: Samenvoegen en duplicaat verwijderen
+    if progress_callback:
+        progress_callback(70)
     try:
         merged_df = filtered_stocklijst_df.merge(
             catalogus_df[[catalogus_col]],
@@ -89,7 +138,9 @@ def filter_stock(stock_file, catalog_file):
         st.error(f"Fout bij het samenvoegen van data: {e}")
         return pd.DataFrame()
 
-    # Stap 6: Hernoemen en afronden
+    # Stap 6: Hernoemen van kolommen en afronden
+    if progress_callback:
+        progress_callback(90)
     rename_map = {
         "Code": "product_sku",
         "# stock": "product_quantity"
@@ -108,37 +159,38 @@ def filter_stock(stock_file, catalog_file):
         st.error(f"Fout bij het verwerken van de geëxporteerde data: {e}")
         return pd.DataFrame()
 
+    if progress_callback:
+        progress_callback(100)
     return merged_df
 
-# --- Streamlit UI ---
-
-st.title("LOE Stocklijst Filter Webapp - Door Maarten Verheyen")
-st.write("Upload hieronder je bestanden om de gefilterde stocklijst te genereren.")
-
-# Gebruik twee kolommen voor een duidelijk onderscheid tussen de uploaders
+# --- Bestandsuploads in twee kolommen ---
 col1, col2 = st.columns(2)
 
 with col1:
-    st.header("Stocklijst uit Mercis (Excel)")
+    st.subheader("Stocklijst uit Mercis (Excel)")
     stock_file = st.file_uploader("Upload hier je Stocklijst", type=["xls", "xlsx"])
 
 with col2:
-    st.header("Catalogus uit KMOShops (CSV)")
+    st.subheader("Catalogus uit KMOShops (CSV)")
     catalog_file = st.file_uploader("Upload hier je Catalogus", type=["csv"])
 
+# --- Verwerking en download ---
 if stock_file and catalog_file:
     if st.button("Filter Stocklijst"):
-        with st.spinner("Even geduld, we verwerken de data..."):
-            filtered_df = filter_stock(stock_file, catalog_file)
-            if not filtered_df.empty:
-                output = io.StringIO()
-                filtered_df.to_csv(output, index=False, sep=';')
-                output.seek(0)
-                current_date = datetime.now().strftime("%Y-%m-%d")
-                st.download_button(
-                    label="Download Gefilterde Stocklijst",
-                    data=output.getvalue(),
-                    file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
-                    mime="text/csv"
-                )
-                st.success("De gefilterde stocklijst is succesvol gegenereerd!")
+        progress_bar = st.progress(0)
+        def progress_callback(percentage):
+            progress_bar.progress(percentage)
+        with st.spinner("Bezig met verwerken..."):
+            filtered_df = filter_stock(stock_file, catalog_file, progress_callback)
+        if not filtered_df.empty:
+            output = io.StringIO()
+            filtered_df.to_csv(output, index=False, sep=';')
+            output.seek(0)
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            st.download_button(
+                label="Download Gefilterde Stocklijst",
+                data=output.getvalue(),
+                file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
+                mime="text/csv"
+            )
+            st.success("De gefilterde stocklijst is succesvol gegenereerd!")
