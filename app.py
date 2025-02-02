@@ -18,9 +18,8 @@ def read_excel_simple(file):
         # Maak een in-memory stream van de bytes
         in_memory_file = BytesIO(file_bytes)
         
-        # Open het XLSX-bestand als zip-archief
+        # Open het XLSX-bestand als zip-archief en pas styles.xml aan indien nodig
         with zipfile.ZipFile(in_memory_file, 'r') as zin:
-            # Maak een nieuw in-memory zip-archief waarin we de (aangepaste) bestanden schrijven
             out_buffer = BytesIO()
             with zipfile.ZipFile(out_buffer, 'w') as zout:
                 # Loop door alle bestanden in het originele archive
@@ -30,20 +29,20 @@ def read_excel_simple(file):
                     if item.filename == 'xl/styles.xml':
                         content = content.replace(b'biltinId', b'builtinId')
                     zout.writestr(item, content)
-            # Zorg dat we aan het begin van de nieuwe stream staan
+            # Zet de pointer aan het begin van de nieuwe stream
             out_buffer.seek(0)
         
         # Laad het workbook vanuit het aangepaste archive in read-only en data-only modus
         wb = load_workbook(out_buffer, read_only=True, data_only=True)
         ws = wb.active
 
-        # Haal alle waarden op (de stijlen worden niet meegenomen)
+        # Haal alle waarden op uit het actieve werkblad
         data = list(ws.values)
         if not data:
             st.error("Het Excel-bestand bevat geen data.")
             return pd.DataFrame()
 
-        # Veronderstel dat de eerste rij kolomnamen bevat
+        # Veronderstel dat de eerste rij de kolomnamen bevat
         header = data[0]
         values = data[1:]
         df = pd.DataFrame(values, columns=header)
@@ -70,12 +69,12 @@ def filter_stock(stock_file, catalog_file):
         st.error(f"Fout bij het inlezen van de catalogus: {e}")
         return pd.DataFrame()
 
-    # Kolomnamen voor filtering (pas dit eventueel aan naar jouw data)
-    stocklijst_col = "Code"  # Alternatief: "EAN"
+    # Definieer de kolomnamen voor filtering
+    stocklijst_col = "Code"      # Bijvoorbeeld: "Code" (of eventueel "EAN")
     catalogus_col = "product_sku"
     
     try:
-        # Zet de relevante kolommen om naar strings om datatypeverschillen te voorkomen
+        # Zorg dat de relevante kolommen als string worden behandeld
         stocklijst_df[stocklijst_col] = stocklijst_df[stocklijst_col].astype(str)
         catalogus_df[catalogus_col] = catalogus_df[catalogus_col].astype(str)
     except KeyError as e:
@@ -83,35 +82,44 @@ def filter_stock(stock_file, catalog_file):
         return pd.DataFrame()
 
     try:
-        # Filter de stocklijst: houd alleen rijen die ook in de catalogus voorkomen
+        # Filter: behoud enkel de rijen in de stocklijst die ook in de catalogus voorkomen
         filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
 
-        # Samenvoegen van de data (hier voeg je bijvoorbeeld extra informatie uit de catalogus toe)
+        # Samenvoegen: voeg de catalogus toe met een suffix zodat de kolomnaam niet conflicteert
         merged_df = filtered_stocklijst_df.merge(
             catalogus_df[[catalogus_col]],
             left_on=stocklijst_col,
             right_on=catalogus_col,
-            how="left"
+            how="left",
+            suffixes=('', '_catalog')
         )
     except Exception as e:
         st.error(f"Fout bij het filteren en samenvoegen van data: {e}")
         return pd.DataFrame()
 
-    # Hernoem en filter kolommen voor de uiteindelijke export
+    # Hernoem kolommen en bewaar enkel de gewenste kolommen
     rename_map = {
         "Code": "product_sku",
         "# stock": "product_quantity"
     }
     try:
+        # Controleer eerst of de vereiste kolommen aanwezig zijn
         missing_columns = [col for col in rename_map.keys() if col not in merged_df.columns]
         if missing_columns:
             st.error(f"De volgende vereiste kolommen ontbreken in de stocklijst: {missing_columns}")
             return pd.DataFrame()
 
+        # Hernoem de kolom 'Code' naar 'product_sku'
         merged_df = merged_df.rename(columns=rename_map)
+
+        # Verwijder de extra SKU-kolom uit de catalogus (die nu 'product_sku_catalog' heet)
+        if 'product_sku_catalog' in merged_df.columns:
+            merged_df = merged_df.drop(columns=['product_sku_catalog'])
+        
+        # Behoud enkel de gewenste kolommen
         merged_df = merged_df[["product_sku", "product_quantity"]]
 
-        # Zorg dat product_quantity een geheel getal is
+        # Zorg dat 'product_quantity' als geheel getal wordt opgeslagen
         merged_df["product_quantity"] = pd.to_numeric(
             merged_df["product_quantity"], errors="coerce"
         ).fillna(0).astype(int)
@@ -134,15 +142,15 @@ if stock_file and catalog_file:
         with st.spinner("Bezig met verwerken..."):
             filtered_df = filter_stock(stock_file, catalog_file)
             if not filtered_df.empty:
-                # Zet de DataFrame om naar CSV
+                # Zet de DataFrame om naar een CSV-bestand
                 output = io.StringIO()
                 filtered_df.to_csv(output, index=False, sep=';')
                 output.seek(0)
-
+                
                 # Huidige datum voor de bestandsnaam
                 current_date = datetime.now().strftime("%Y-%m-%d")
-
-                # Download knop tonen
+                
+                # Downloadknop tonen
                 st.download_button(
                     label="Download Gefilterde Stocklijst",
                     data=output.getvalue(),
