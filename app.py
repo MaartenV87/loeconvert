@@ -28,9 +28,7 @@ def filter_stock(stock_file, catalog_file):
     rename_map = {
         "Omschrijving": "product_name",
         "Code": "product_sku",
-        "Verk. pr. \n€ excl.": "product_price",
-        "product_weight": "product_weight",
-        "product_description": "product_description"
+        "# stock": "product_quantity"
     }
     
     # Controleer of alle vereiste kolommen beschikbaar zijn
@@ -43,11 +41,8 @@ def filter_stock(stock_file, catalog_file):
     
     # Alleen gewenste kolommen behouden
     filtered_stocklijst_df = filtered_stocklijst_df[[
-        "product_name", "product_sku", "product_price", "product_weight", "product_description"
+        "product_name", "product_sku", "product_quantity"
     ]]
-    
-    # "type" kolom toevoegen met vaste waarde "product"
-    filtered_stocklijst_df.insert(0, "type", "product")
     
     return filtered_stocklijst_df
 
