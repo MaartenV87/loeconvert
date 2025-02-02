@@ -35,7 +35,7 @@ st.markdown("""
         color: #555555;
         margin: 0;
     }
-    /* Centraal uitgelijnde knop voor st.button */
+    /* Centraal uitgelijnde knop */
     .centered-button > div.stButton {
         display: flex;
         justify-content: center;
@@ -53,11 +53,11 @@ st.sidebar.info(
     **Stap 1:** Upload de *Stocklijst uit Mercis (Excel)* in de linkerkolom.  
     **Stap 2:** Upload de *Catalogus uit KMOShops (CSV)* in de rechterkolom.  
     **Stap 3:** Klik op **Filter Stocklijst** om de verwerking te starten.  
-    **Stap 4:** Download de gefilterde stocklijst zodra de verwerking voltooid is.
+    **Stap 4:** Download de gefilterde stocklijst en bekijk het verschiloverzicht onderaan.
     """
 )
 
-# --- Functies voor het inlezen en verwerken van de data ---
+# --- Functies voor inlezen en verwerken van de data ---
 
 def read_excel_simple(file):
     """
@@ -192,6 +192,7 @@ if st.button("Filter Stocklijst"):
     with st.spinner("Bezig met verwerken..."):
         filtered_df = filter_stock(stock_file, catalog_file, progress_callback)
     if not filtered_df.empty:
+        # --- Excel Export (ongewijzigd) ---
         output = io.StringIO()
         filtered_df.to_csv(output, index=False, sep=';')
         output.seek(0)
@@ -208,4 +209,44 @@ if st.button("Filter Stocklijst"):
             """
         st.markdown(download_link, unsafe_allow_html=True)
         st.success("De gefilterde stocklijst is succesvol gegenereerd!")
+        
+        # --- Overzicht van verschillen ---
+        # Lees de catalogus opnieuw voor de benodigde extra kolommen. 
+        # (Verondersteld wordt dat de catalogus de kolommen 'product_sku', 'Omschrijving' en 'product_quantity' bevat)
+        try:
+            catalogus_df_full = pd.read_csv(catalog_file, sep=None, engine="python")
+            catalogus_df_full['product_sku'] = catalogus_df_full['product_sku'].astype(str)
+            # Maak een kopie van de export en hernoem de stocklist-hoeveelheid naar 'Nieuw aantal'
+            filtered_export = filtered_df.copy().rename(columns={'product_quantity': 'Nieuw aantal'})
+            # Voeg de catalogus-informatie toe: 'Omschrijving' en 'product_quantity' als 'Vorig aantal'
+            diff_df = pd.merge(filtered_export, 
+                               catalogus_df_full[['product_sku', 'Omschrijving', 'product_quantity']], 
+                               on='product_sku', how='left')
+            diff_df = diff_df.rename(columns={'product_quantity': 'Vorig aantal'})
+            # Bereken het verschil: (Nieuw aantal - Vorig aantal)
+            diff_df['Verschil'] = diff_df['Nieuw aantal'] - diff_df['Vorig aantal']
+            # Houd enkel producten met een verschil
+            diff_df = diff_df[diff_df['Verschil'] != 0]
+            # Behoud de gewenste kolommen en herschik de volgorde
+            diff_df = diff_df[['Omschrijving', 'Vorig aantal', 'Nieuw aantal', 'Verschil']]
+            
+            if not diff_df.empty:
+                st.markdown("### Overzicht van verschillen")
+                # Functie voor het kleuren van de 'Verschil'-kolom
+                def color_diff(val):
+                    try:
+                        if val > 0:
+                            return 'color: green; font-weight: bold'
+                        elif val < 0:
+                            return 'color: red; font-weight: bold'
+                        else:
+                            return ''
+                    except:
+                        return ''
+                styled_diff = diff_df.style.applymap(color_diff, subset=['Verschil'])
+                st.markdown(styled_diff.to_html(), unsafe_allow_html=True)
+            else:
+                st.info("Geen verschillen gevonden tussen de catalogus en de stocklijst.")
+        except Exception as e:
+            st.error(f"Fout bij het genereren van het overzicht van verschillen: {e}")
 st.markdown('</div>', unsafe_allow_html=True)
