@@ -4,22 +4,32 @@ import io
 from datetime import datetime
 
 # --- Monkey patch voor openpyxl om de compressiefout te omzeilen ---
+# Patch zowel NamedCellStyle als _NamedCellStyle (deze laatste veroorzaakt de foutmelding)
 try:
-    from openpyxl.styles.named_styles import NamedCellStyle
+    from openpyxl.styles.named_styles import NamedCellStyle, _NamedCellStyle
 
-    # Sla de originele __init__ op
-    original_init = NamedCellStyle.__init__
+    # Patch voor NamedCellStyle (publieke klasse)
+    original_init_named = NamedCellStyle.__init__
 
-    def patched_init(self, *args, **kwargs):
-        # Als er een foutief keyword 'biltinId' voorkomt, wijzig dit naar 'builtinId'
+    def patched_init_named(self, *args, **kwargs):
         if "biltinId" in kwargs:
             kwargs["builtinId"] = kwargs.pop("biltinId")
-        original_init(self, *args, **kwargs)
+        original_init_named(self, *args, **kwargs)
 
-    # Vervang de originele __init__ door de gepatchte versie
-    NamedCellStyle.__init__ = patched_init
+    NamedCellStyle.__init__ = patched_init_named
+
+    # Patch voor _NamedCellStyle (interne klasse)
+    original_init_internal = _NamedCellStyle.__init__
+
+    def patched_init_internal(self, *args, **kwargs):
+        if "biltinId" in kwargs:
+            kwargs["builtinId"] = kwargs.pop("biltinId")
+        original_init_internal(self, *args, **kwargs)
+
+    _NamedCellStyle.__init__ = patched_init_internal
+
 except ImportError:
-    # Als openpyxl of NamedCellStyle niet geïmporteerd kan worden, wordt er niets gedaan.
+    # Mocht openpyxl of de betreffende klassen niet beschikbaar zijn, dan wordt er niets gepatcht.
     pass
 # --- Einde monkey patch ---
 
@@ -69,7 +79,7 @@ def filter_stock(stock_file, catalog_file):
         # Filteren: Alleen rijen uit de stocklijst behouden die in de catalogus staan
         filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
 
-        # Toevoegen van product_name vanuit de catalogus
+        # Samenvoegen van data (in dit voorbeeld enkel op de product_sku)
         merged_df = filtered_stocklijst_df.merge(
             catalogus_df[[catalogus_col]],
             left_on=stocklijst_col,
@@ -96,9 +106,7 @@ def filter_stock(stock_file, catalog_file):
         merged_df = merged_df.rename(columns=rename_map)
 
         # Alleen gewenste kolommen behouden
-        merged_df = merged_df[[
-            "product_sku", "product_quantity"
-        ]]
+        merged_df = merged_df[["product_sku", "product_quantity"]]
 
         # product_quantity omzetten naar gehele getallen
         merged_df["product_quantity"] = pd.to_numeric(
@@ -112,7 +120,6 @@ def filter_stock(stock_file, catalog_file):
 
 # Streamlit UI
 st.title("LOE Stocklijst Filter Webapp - Door Maarten Verheyen")
-
 st.write("Upload je stocklijst en catalogus om de gefilterde stocklijst te genereren.")
 
 # Bestand uploads
@@ -130,7 +137,7 @@ if stock_file and catalog_file:
                 filtered_df.to_csv(output, index=False, sep=';')
                 output.seek(0)
 
-                # Zorg dat datetime correct gebruikt wordt
+                # Huidige datum voor de bestandsnaam
                 current_date = datetime.now().strftime("%Y-%m-%d")
 
                 # Download knop tonen
