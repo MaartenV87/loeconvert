@@ -213,7 +213,7 @@ if st.button("Filter Stocklijst"):
             # Maak een kopie van de export en hernoem de stocklijsthoeveelheid naar 'Nieuw aantal'
             filtered_export = filtered_df.copy().rename(columns={'product_quantity': 'Nieuw aantal'})
             
-            # Voeg de catalogus-informatie toe: 'product_name' als 'Productnaam' en 'product_quantity' als 'Vorig aantal'
+            # Voeg de catalogus-informatie toe: gebruik "product_name" als "Productnaam" en "product_quantity" als "Vorig aantal"
             diff_df = pd.merge(filtered_export, 
                                catalogus_df_full[['product_sku', 'product_name', 'product_quantity']], 
                                on='product_sku', how='left')
@@ -240,10 +240,10 @@ if st.button("Filter Stocklijst"):
                             return ''
                     except:
                         return ''
-                styled_diff = diff_df.style.applymap(color_diff, subset=['Verschil']).set_table_styles(
-                    [{'selector': 'table', 'props': [('margin-left', 'auto'), ('margin-right', 'auto')]}]
-                )
-                st.markdown(styled_diff.to_html(), unsafe_allow_html=True)
+                styled_diff = diff_df.style.applymap(color_diff, subset=['Verschil'])
+                # Converteer de gestylede tabel naar HTML en omwikkel deze met een div voor centreren
+                table_html = styled_diff.to_html()
+                st.markdown(f"<div style='display: flex; justify-content: center;'>{table_html}</div>", unsafe_allow_html=True)
             else:
                 st.info("Geen verschillen gevonden tussen de catalogus en de stocklijst.")
         except Exception as e:
