@@ -2,44 +2,27 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
-
-# --- Monkey patch voor openpyxl om de compressiefout te omzeilen ---
-# Patch zowel NamedCellStyle als _NamedCellStyle (deze laatste veroorzaakt de foutmelding)
-try:
-    from openpyxl.styles.named_styles import NamedCellStyle, _NamedCellStyle
-
-    # Patch voor NamedCellStyle (publieke klasse)
-    original_init_named = NamedCellStyle.__init__
-
-    def patched_init_named(self, *args, **kwargs):
-        if "biltinId" in kwargs:
-            kwargs["builtinId"] = kwargs.pop("biltinId")
-        original_init_named(self, *args, **kwargs)
-
-    NamedCellStyle.__init__ = patched_init_named
-
-    # Patch voor _NamedCellStyle (interne klasse)
-    original_init_internal = _NamedCellStyle.__init__
-
-    def patched_init_internal(self, *args, **kwargs):
-        if "biltinId" in kwargs:
-            kwargs["builtinId"] = kwargs.pop("biltinId")
-        original_init_internal(self, *args, **kwargs)
-
-    _NamedCellStyle.__init__ = patched_init_internal
-
-except ImportError:
-    # Mocht openpyxl of de betreffende klassen niet beschikbaar zijn, dan wordt er niets gepatcht.
-    pass
-# --- Einde monkey patch ---
+from openpyxl import load_workbook
 
 def read_excel_simple(file):
     """
-    Lees een Excel-bestand eenvoudig in zonder stijlen of complexe structuren.
+    Lees een Excel-bestand in via openpyxl in read-only modus (zonder stijlen) 
+    om problemen met style parsing te vermijden.
     """
     try:
-        # Probeer direct met pandas in te lezen
-        df = pd.read_excel(file, engine="openpyxl")
+        # Open het workbook in read-only en data-only modus
+        wb = load_workbook(file, read_only=True, data_only=True)
+        ws = wb.active
+
+        # Haal alle waarden op uit het actieve werkblad
+        data = list(ws.values)
+        if not data:
+            st.error("Het Excel-bestand bevat geen data.")
+            return pd.DataFrame()
+
+        # Veronderstel dat de eerste rij de kolomnamen bevat
+        header, values = data[0], data[1:]
+        df = pd.DataFrame(values, columns=header)
         return df
     except Exception as e:
         st.error(f"Fout bij het inlezen van de Excel: {e}")
