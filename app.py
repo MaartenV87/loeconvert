@@ -229,29 +229,25 @@ if st.button("Filter Stocklijst"):
             diff_df = diff_df[['Productnaam', 'Vorig aantal', 'Nieuw aantal', 'Verschil']]
             
             if not diff_df.empty:
-                # Zet de titel gecentreerd
                 st.markdown("<h3 style='text-align: center;'>Overzicht van verschillen</h3>", unsafe_allow_html=True)
                 
-                # Definieer een functie die per rij de achtergrondkleur teruggeeft
+                # Definieer een functie die per rij de achtergrondkleur bepaalt en het verschil vet weergeeft
                 def color_row(row):
                     diff = row['Verschil']
-                    # Kies een lichte kleur voor de achtergrond
                     if diff > 0:
                         bg = "background-color: #d4edda;"  # lichtgroen
                     elif diff < 0:
                         bg = "background-color: #f8d7da;"  # lichtrood
                     else:
                         bg = ""
-                    # Voor elke kolom, als het de 'Verschil'-kolom is, voeg dan ook vet toe
-                    return [bg + (" font-weight: bold;" if col == 'Verschil' else "") for col in row.index]
+                    # Voor alle kolommen in deze rij, voeg de achtergrond toe; als kolom 'Verschil', voeg ook vet toe.
+                    return [bg + (" font-weight: bold;" if col == 'Verschil' else bg) for col in row.index]
                 
                 styled_diff = diff_df.style.apply(color_row, axis=1)
-                # Centreer de gehele tabel via table styles
-                styled_diff = styled_diff.set_table_styles(
-                    [{'selector': 'table', 'props': [('margin-left', 'auto'), ('margin-right', 'auto')]}]
-                )
+                # Extra: center de gehele tabel met een wrapper div
                 table_html = styled_diff.to_html()
-                st.markdown(table_html, unsafe_allow_html=True)
+                centered_html = f"<div style='width:100%; display: flex; justify-content: center;'>{table_html}</div>"
+                st.markdown(centered_html, unsafe_allow_html=True)
             else:
                 st.info("Geen verschillen gevonden tussen de catalogus en de stocklijst.")
         except Exception as e:
