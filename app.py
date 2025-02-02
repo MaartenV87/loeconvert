@@ -2,19 +2,34 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
-from openpyxl import load_workbook
 
-def repair_excel_and_read(file):
+# --- Monkey patch voor openpyxl om de compressiefout te omzeilen ---
+try:
+    from openpyxl.styles.named_styles import NamedCellStyle
+
+    # Sla de originele __init__ op
+    original_init = NamedCellStyle.__init__
+
+    def patched_init(self, *args, **kwargs):
+        # Als er een foutief keyword 'biltinId' voorkomt, wijzig dit naar 'builtinId'
+        if "biltinId" in kwargs:
+            kwargs["builtinId"] = kwargs.pop("biltinId")
+        original_init(self, *args, **kwargs)
+
+    # Vervang de originele __init__ door de gepatchte versie
+    NamedCellStyle.__init__ = patched_init
+except ImportError:
+    # Als openpyxl of NamedCellStyle niet geïmporteerd kan worden, wordt er niets gedaan.
+    pass
+# --- Einde monkey patch ---
+
+def read_excel_simple(file):
     """
-    Lees een Excel-bestand in en repareer als het bestand gecomprimeerd of beschadigd lijkt.
+    Lees een Excel-bestand eenvoudig in zonder stijlen of complexe structuren.
     """
     try:
-        # Probeer direct in te lezen
-        wb = load_workbook(file, data_only=True)
-        sheet = wb.active
-        data = sheet.values
-        columns = next(data)  # Haal de kolomnamen uit de eerste rij
-        df = pd.DataFrame(data, columns=columns)
+        # Probeer direct met pandas in te lezen
+        df = pd.read_excel(file, engine="openpyxl")
         return df
     except Exception as e:
         st.error(f"Fout bij het inlezen van de Excel: {e}")
@@ -22,8 +37,8 @@ def repair_excel_and_read(file):
 
 def filter_stock(stock_file, catalog_file):
     try:
-        # Stocklijst inlezen en repareren indien nodig
-        stocklijst_df = repair_excel_and_read(stock_file)
+        # Stocklijst inlezen
+        stocklijst_df = read_excel_simple(stock_file)
         if stocklijst_df.empty:
             st.error("De stocklijst is leeg of kan niet worden gelezen. Controleer of het bestand correct is opgeslagen.")
             return pd.DataFrame()
@@ -116,7 +131,6 @@ if stock_file and catalog_file:
                 output.seek(0)
 
                 # Zorg dat datetime correct gebruikt wordt
-                from datetime import datetime
                 current_date = datetime.now().strftime("%Y-%m-%d")
 
                 # Download knop tonen
