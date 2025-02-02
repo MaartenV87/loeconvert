@@ -6,15 +6,15 @@ from openpyxl import load_workbook
 
 def read_protected_excel(file):
     """
-    Probeer een beveiligd Excel-bestand in te lezen.
+    Probeer een beveiligd Excel-bestand in te lezen en negeer stijlinformatie.
     """
     try:
-        # Probeer direct in te lezen
-        df = pd.read_excel(file, engine="openpyxl")
+        # Probeer direct in te lezen zonder stijlen
+        df = pd.read_excel(file, engine="openpyxl", skiprows=0)
         return df
     except Exception as e:
         try:
-            # Als direct lezen mislukt, probeer handmatig laden
+            # Als direct lezen mislukt, probeer handmatig laden zonder stijlen
             wb = load_workbook(file, read_only=True, data_only=True)
             sheet = wb.active
 
@@ -24,7 +24,8 @@ def read_protected_excel(file):
             df = pd.DataFrame(data, columns=columns)
             return df
         except Exception as inner_e:
-            st.error(f"Fout bij het inlezen van de stocklijst: {inner_e}")
+            st.error("Fout bij het inlezen van de stocklijst: Mogelijk bevat het bestand corrupte of complexe stijlen.")
+            st.error(f"Technische foutmelding: {inner_e}")
             return pd.DataFrame()
 
 def filter_stock(stock_file, catalog_file):
@@ -32,7 +33,7 @@ def filter_stock(stock_file, catalog_file):
         # Stocklijst inlezen
         stocklijst_df = read_protected_excel(stock_file)
         if stocklijst_df.empty:
-            st.error("De stocklijst is leeg of kan niet worden gelezen.")
+            st.error("De stocklijst is leeg of kan niet worden gelezen. Controleer of het bestand correct is opgeslagen.")
             return pd.DataFrame()
     except Exception as e:
         st.error(f"Fout bij het verwerken van de stocklijst: {e}")
