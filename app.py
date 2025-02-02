@@ -4,11 +4,12 @@ import io
 from datetime import datetime
 from openpyxl import load_workbook
 
-def read_excel_without_styles(file):
+def repair_excel_and_read(file):
     """
-    Lees een Excel-bestand in en negeer complexe stijlen.
+    Lees een Excel-bestand in en repareer als het bestand gecomprimeerd of beschadigd lijkt.
     """
     try:
+        # Probeer direct in te lezen
         wb = load_workbook(file, data_only=True)
         sheet = wb.active
         data = sheet.values
@@ -16,13 +17,26 @@ def read_excel_without_styles(file):
         df = pd.DataFrame(data, columns=columns)
         return df
     except Exception as e:
-        st.error(f"Fout bij het inlezen van de Excel zonder stijlen: {e}")
-        return pd.DataFrame()
+        try:
+            # Als direct lezen mislukt, sla het bestand opnieuw op zonder compressie
+            temp_file = "/tmp/repaired_file.xlsx"
+            with open(file.name, 'rb') as f:
+                with open(temp_file, 'wb') as temp_f:
+                    temp_f.write(f.read())
+            wb = load_workbook(temp_file, data_only=True)
+            sheet = wb.active
+            data = sheet.values
+            columns = next(data)  # Haal de kolomnamen uit de eerste rij
+            df = pd.DataFrame(data, columns=columns)
+            return df
+        except Exception as repair_e:
+            st.error(f"Fout bij het repareren van het Excel-bestand: {repair_e}")
+            return pd.DataFrame()
 
 def filter_stock(stock_file, catalog_file):
     try:
-        # Stocklijst inlezen zonder stijlen
-        stocklijst_df = read_excel_without_styles(stock_file)
+        # Stocklijst inlezen en repareren indien nodig
+        stocklijst_df = repair_excel_and_read(stock_file)
         if stocklijst_df.empty:
             st.error("De stocklijst is leeg of kan niet worden gelezen. Controleer of het bestand correct is opgeslagen.")
             return pd.DataFrame()
@@ -40,8 +54,7 @@ def filter_stock(stock_file, catalog_file):
     # Kolommen identificeren voor filtering
     stocklijst_col = "Code"  # Alternatief: "EAN"
     catalogus_col = "product_sku"
-    catalogus_name_col = "product_name"
-
+    
     try:
         # Converteren naar string om mogelijke datatypeverschillen te voorkomen
         stocklijst_df[stocklijst_col] = stocklijst_df[stocklijst_col].astype(str)
@@ -56,7 +69,7 @@ def filter_stock(stock_file, catalog_file):
 
         # Toevoegen van product_name vanuit de catalogus
         merged_df = filtered_stocklijst_df.merge(
-            catalogus_df[[catalogus_col, catalogus_name_col]],
+            catalogus_df[[catalogus_col]],
             left_on=stocklijst_col,
             right_on=catalogus_col,
             how="left"
@@ -82,7 +95,7 @@ def filter_stock(stock_file, catalog_file):
 
         # Alleen gewenste kolommen behouden
         merged_df = merged_df[[
-            "product_name", "product_sku", "product_quantity"
+            "product_sku", "product_quantity"
         ]]
 
         # product_quantity omzetten naar gehele getallen
