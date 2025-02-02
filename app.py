@@ -13,6 +13,7 @@ def filter_stock(stock_file, catalog_file):
     # Kolommen identificeren voor filtering
     stocklijst_col = "Code"  # Alternatief: "EAN"
     catalogus_col = "product_sku"
+    catalogus_name_col = "product_name"
     
     # Converteren naar string om mogelijke datatypeverschillen te voorkomen
     stocklijst_df[stocklijst_col] = stocklijst_df[stocklijst_col].astype(str)
@@ -21,32 +22,39 @@ def filter_stock(stock_file, catalog_file):
     # Filteren: Alleen rijen uit de stocklijst behouden die in de catalogus staan
     filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
     
+    # Toevoegen van product_name vanuit de catalogus
+    merged_df = filtered_stocklijst_df.merge(
+        catalogus_df[[catalogus_col, catalogus_name_col]],
+        left_on=stocklijst_col,
+        right_on=catalogus_col,
+        how="left"
+    )
+    
     # Kolommen hernoemen en filteren voor export
     rename_map = {
-        "Omschrijving": "product_name",
         "Code": "product_sku",
         "# stock": "product_quantity"
     }
     
     # Controleer of alle vereiste kolommen beschikbaar zijn
-    missing_columns = [col for col in rename_map.keys() if col not in filtered_stocklijst_df.columns]
+    missing_columns = [col for col in rename_map.keys() if col not in merged_df.columns]
     if missing_columns:
         st.error(f"De volgende vereiste kolommen ontbreken in de stocklijst: {missing_columns}")
         return pd.DataFrame()  # Lege DataFrame retourneren als er kolommen ontbreken
     
-    filtered_stocklijst_df = filtered_stocklijst_df.rename(columns=rename_map)
+    merged_df = merged_df.rename(columns=rename_map)
     
     # Alleen gewenste kolommen behouden
-    filtered_stocklijst_df = filtered_stocklijst_df[[
+    merged_df = merged_df[[
         "product_name", "product_sku", "product_quantity"
     ]]
 
     # product_quantity omzetten naar gehele getallen
-    filtered_stocklijst_df["product_quantity"] = pd.to_numeric(
-        filtered_stocklijst_df["product_quantity"], errors="coerce"
+    merged_df["product_quantity"] = pd.to_numeric(
+        merged_df["product_quantity"], errors="coerce"
     ).fillna(0).astype(int)
     
-    return filtered_stocklijst_df
+    return merged_df
 
 # Streamlit UI
 st.title("LOE Stocklijst Filter Webapp - Door Maarten Verheyen")
