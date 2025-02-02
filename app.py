@@ -10,6 +10,9 @@ def filter_stock(stock_file, catalog_file):
     # Catalogus inlezen met automatische delimiter detectie
     catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
     
+    # Controleer beschikbare kolommen in de stocklijst
+    st.write("Beschikbare kolommen in stocklijst:", stocklijst_df.columns.tolist())
+    
     # Kolommen identificeren voor filtering
     stocklijst_col = "Code"  # Alternatief: "EAN"
     catalogus_col = "product_sku"
@@ -22,13 +25,21 @@ def filter_stock(stock_file, catalog_file):
     filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
     
     # Kolommen hernoemen en filteren voor export
-    filtered_stocklijst_df = filtered_stocklijst_df.rename(columns={
+    rename_map = {
         "Omschrijving": "product_name",
         "Code": "product_sku",
         "Verk. pr. \n€ excl.": "product_price",
         "product_weight": "product_weight",
         "product_description": "product_description"
-    })
+    }
+    
+    # Controleer of alle vereiste kolommen beschikbaar zijn
+    missing_columns = [col for col in rename_map.keys() if col not in filtered_stocklijst_df.columns]
+    if missing_columns:
+        st.error(f"De volgende vereiste kolommen ontbreken in de stocklijst: {missing_columns}")
+        return pd.DataFrame()  # Lege DataFrame retourneren als er kolommen ontbreken
+    
+    filtered_stocklijst_df = filtered_stocklijst_df.rename(columns=rename_map)
     
     # Alleen gewenste kolommen behouden
     filtered_stocklijst_df = filtered_stocklijst_df[[
@@ -54,21 +65,22 @@ if stock_file and catalog_file:
         with st.spinner("Bezig met verwerken..."):
             filtered_df = filter_stock(stock_file, catalog_file)
             
-            # Omzetten naar CSV-bestand
-            output = io.StringIO()
-            filtered_df.to_csv(output, index=False, sep=';')
-            output.seek(0)
-            
-            # Zorg dat datetime correct gebruikt wordt
-            from datetime import datetime
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            
-            # Download knop tonen
-            st.download_button(
-                label="Download Gefilterde Stocklijst",
-                data=output.getvalue(),
-                file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
-                mime="text/csv"
-            )
-            
-            st.success("De gefilterde stocklijst is succesvol gegenereerd!")
+            if not filtered_df.empty:
+                # Omzetten naar CSV-bestand
+                output = io.StringIO()
+                filtered_df.to_csv(output, index=False, sep=';')
+                output.seek(0)
+                
+                # Zorg dat datetime correct gebruikt wordt
+                from datetime import datetime
+                current_date = datetime.now().strftime("%Y-%m-%d")
+                
+                # Download knop tonen
+                st.download_button(
+                    label="Download Gefilterde Stocklijst",
+                    data=output.getvalue(),
+                    file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
+                    mime="text/csv"
+                )
+                
+                st.success("De gefilterde stocklijst is succesvol gegenereerd!")
