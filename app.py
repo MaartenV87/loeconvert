@@ -43,8 +43,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- Header (alleen tekst) ---
-st.markdown("<div class='header-banner'><h1>LOE Stocklijst Filter App</h1><h3>Gemaakt door Maarten Verheyen</h3></div>", unsafe_allow_html=True)
+# --- Header (alleen tekst met mailto-link) ---
+st.markdown("<div class='header-banner'><h1>LOE Stocklijst Filter App</h1><h3>Gemaakt door <a href='mailto:verheyen.maarten87@gmail.com'>Maarten Verheyen</a></h3></div>", unsafe_allow_html=True)
 
 # --- Sidebar met instructies ---
 st.sidebar.title("Instructies")
@@ -53,7 +53,8 @@ st.sidebar.info(
     **Stap 1:** Upload de *Stocklijst uit Mercis (Excel)* in de linkerkolom.  
     **Stap 2:** Upload de *Catalogus uit KMOShops (CSV)* in de rechterkolom.  
     **Stap 3:** Klik op **Filter Stocklijst** om de verwerking te starten.  
-    **Stap 4:** Download de gefilterde stocklijst en bekijk het verschiloverzicht onderaan.
+    **Stap 4:** Download de gefilterde stocklijst en bekijk het overzicht van wijzigingen in de stock onderaan.  
+    **Vragen over deze webapp?** Contacteer mij via [verheyen.maarten87@gmail.com](mailto:verheyen.maarten87@gmail.com)
     """
 )
 
@@ -192,7 +193,7 @@ if st.button("Filter Stocklijst"):
         st.markdown(download_link, unsafe_allow_html=True)
         st.success("De gefilterde stocklijst is succesvol gegenereerd!")
         
-        # --- Overzicht van Verschillen ---
+        # --- Overzicht van Wijzigingen in de Stock ---
         try:
             # Reset de pointer van catalog_file zodat deze opnieuw ingelezen kan worden
             catalog_file.seek(0)
@@ -229,9 +230,9 @@ if st.button("Filter Stocklijst"):
             diff_df = diff_df[['Productnaam', 'Vorig aantal', 'Nieuw aantal', 'Verschil']]
             
             if not diff_df.empty:
-                st.markdown("<h3 style='text-align: center;'>Overzicht van verschillen</h3>", unsafe_allow_html=True)
+                st.markdown("<h3 style='text-align: center;'>Overzicht van wijzigingen in de stock</h3>", unsafe_allow_html=True)
                 
-                # Definieer een functie die per rij de achtergrondkleur bepaalt en het verschil vet weergeeft
+                # Definieer een functie die per rij de achtergrondkleur bepaalt en de hele rij kleurt
                 def color_row(row):
                     diff = row['Verschil']
                     if diff > 0:
@@ -240,16 +241,16 @@ if st.button("Filter Stocklijst"):
                         bg = "background-color: #f8d7da;"  # lichtrood
                     else:
                         bg = ""
-                    # Voor alle kolommen in deze rij, voeg de achtergrond toe; als kolom 'Verschil', voeg ook vet toe.
+                    # Geef de hele rij de achtergrondkleur; zet de 'Verschil'-waarde vet
                     return [bg + (" font-weight: bold;" if col == 'Verschil' else bg) for col in row.index]
                 
                 styled_diff = diff_df.style.apply(color_row, axis=1)
-                # Extra: center de gehele tabel met een wrapper div
+                # Centreer de gehele tabel met een wrapper div
                 table_html = styled_diff.to_html()
                 centered_html = f"<div style='width:100%; display: flex; justify-content: center;'>{table_html}</div>"
                 st.markdown(centered_html, unsafe_allow_html=True)
             else:
-                st.info("Geen verschillen gevonden tussen de catalogus en de stocklijst.")
+                st.info("Geen wijzigingen gevonden tussen de catalogus en de stocklijst.")
         except Exception as e:
-            st.error(f"Fout bij het genereren van het overzicht van verschillen: {e}")
+            st.error(f"Fout bij het genereren van het overzicht van wijzigingen in de stock: {e}")
 st.markdown('</div>', unsafe_allow_html=True)
