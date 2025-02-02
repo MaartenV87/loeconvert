@@ -5,13 +5,14 @@ import zipfile
 from io import BytesIO
 from datetime import datetime
 from openpyxl import load_workbook
+import base64
 
 # --- Pagina-configuratie en aangepaste CSS ---
 st.set_page_config(page_title="LOE Stocklijst Filter", page_icon=":package:", layout="wide")
 
 st.markdown("""
     <style>
-    /* Achtergrondkleur voor de hele pagina */
+    /* Algemene pagina styling */
     .reportview-container {
         background: #f0f2f6;
     }
@@ -29,13 +30,25 @@ st.markdown("""
         color: #333333;
         margin: 0;
     }
+    .header-banner h3 {
+        font-size: 1em;
+        color: #555555;
+        margin: 0;
+    }
+    /* Centraal uitgelijnde knoppen */
+    .centered-button {
+        display: flex;
+        justify-content: center;
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # --- Banner ---
-# (Gebruik een eigen afbeelding door de URL aan te passen)
-st.image("https://via.placeholder.com/1200x300?text=LOE+Stocklijst+Filter", use_column_width=True)
-st.markdown("<div class='header-banner'><h1>LOE Stocklijst Filter Webapp</h1></div>", unsafe_allow_html=True)
+# (Pas de URL hieronder aan naar een eigen afbeelding indien gewenst)
+st.image("https://via.placeholder.com/1200x300?text=LOE+Stocklijst+Filter", use_container_width=True)
+st.markdown("<div class='header-banner'><h1>LOE Stocklijst Filter App</h1><h3>Gemaakt door Maarten Verheyen</h3></div>", unsafe_allow_html=True)
 
 # --- Sidebar met instructies ---
 st.sidebar.title("Instructies")
@@ -48,7 +61,7 @@ st.sidebar.info(
     """
 )
 
-# --- Functies voor het inlezen en verwerken van de data ---
+# --- Functies voor inlezen en verwerken van de data ---
 
 def read_excel_simple(file):
     """
@@ -176,21 +189,30 @@ with col2:
 
 # --- Verwerking en download ---
 if stock_file and catalog_file:
-    if st.button("Filter Stocklijst"):
-        progress_bar = st.progress(0)
-        def progress_callback(percentage):
-            progress_bar.progress(percentage)
-        with st.spinner("Bezig met verwerken..."):
-            filtered_df = filter_stock(stock_file, catalog_file, progress_callback)
-        if not filtered_df.empty:
-            output = io.StringIO()
-            filtered_df.to_csv(output, index=False, sep=';')
-            output.seek(0)
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            st.download_button(
-                label="Download Gefilterde Stocklijst",
-                data=output.getvalue(),
-                file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
-                mime="text/csv"
-            )
-            st.success("De gefilterde stocklijst is succesvol gegenereerd!")
+    # Centreer de Filter-knop met behulp van drie kolommen (button in de middelste kolom)
+    cols = st.columns(3)
+    with cols[1]:
+        if st.button("Filter Stocklijst"):
+            progress_bar = st.progress(0)
+            def progress_callback(percentage):
+                progress_bar.progress(percentage)
+            with st.spinner("Bezig met verwerken..."):
+                filtered_df = filter_stock(stock_file, catalog_file, progress_callback)
+            if not filtered_df.empty:
+                output = io.StringIO()
+                filtered_df.to_csv(output, index=False, sep=';')
+                output.seek(0)
+                current_date = datetime.now().strftime("%Y-%m-%d")
+                csv_data = output.getvalue()
+                # Base64 encode van de CSV-data
+                b64 = base64.b64encode(csv_data.encode()).decode()
+                download_link = f"""
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="data:file/csv;base64,{b64}" download="Gefilterde_Stocklijst_{current_date}.csv"
+                    style="background-color: #28a745; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; font-weight: bold;">
+                        Download Gefilterde Stocklijst
+                    </a>
+                </div>
+                """
+                st.markdown(download_link, unsafe_allow_html=True)
+                st.success("De gefilterde stocklijst is succesvol gegenereerd!")
