@@ -212,7 +212,7 @@ if st.button("Filter Stocklijst"):
         
         # --- Overzicht van Verschillen ---
         try:
-            # Reset de pointer van catalog_file voordat we deze opnieuw inlezen
+            # Reset de pointer van catalog_file zodat de inhoud opnieuw gelezen kan worden
             catalog_file.seek(0)
             # Probeer eerst de catalogus in te lezen met automatische delimiter detectie
             try:
@@ -224,7 +224,13 @@ if st.button("Filter Stocklijst"):
                 except Exception as e:
                     # Fallback: probeer met een puntkomma
                     catalogus_df_full = pd.read_csv(catalog_file, delimiter=';')
+            
+            # Zorg dat de kolom 'product_sku' als string is
             catalogus_df_full['product_sku'] = catalogus_df_full['product_sku'].astype(str)
+            
+            # Als de kolom 'Omschrijving' niet bestaat, voeg deze toe (bijvoorbeeld als lege kolom of met een standaardtekst)
+            if 'Omschrijving' not in catalogus_df_full.columns:
+                catalogus_df_full['Omschrijving'] = "Geen omschrijving"
             
             # Maak een kopie van de export en hernoem de stocklist-hoeveelheid naar 'Nieuw aantal'
             filtered_export = filtered_df.copy().rename(columns={'product_quantity': 'Nieuw aantal'})
