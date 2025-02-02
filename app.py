@@ -17,21 +17,8 @@ def repair_excel_and_read(file):
         df = pd.DataFrame(data, columns=columns)
         return df
     except Exception as e:
-        try:
-            # Als direct lezen mislukt, sla het bestand opnieuw op zonder compressie
-            temp_file = "/tmp/repaired_file.xlsx"
-            with open(file.name, 'rb') as f:
-                with open(temp_file, 'wb') as temp_f:
-                    temp_f.write(f.read())
-            wb = load_workbook(temp_file, data_only=True)
-            sheet = wb.active
-            data = sheet.values
-            columns = next(data)  # Haal de kolomnamen uit de eerste rij
-            df = pd.DataFrame(data, columns=columns)
-            return df
-        except Exception as repair_e:
-            st.error(f"Fout bij het repareren van het Excel-bestand: {repair_e}")
-            return pd.DataFrame()
+        st.error(f"Fout bij het inlezen van de Excel: {e}")
+        return pd.DataFrame()
 
 def filter_stock(stock_file, catalog_file):
     try:
