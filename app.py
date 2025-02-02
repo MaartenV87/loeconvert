@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+from datetime import datetime
 
 def filter_stock(stock_file, catalog_file):
     # Stocklijst inlezen
@@ -28,8 +29,8 @@ st.title("LOE Stocklijst Filter Webapp - Door Maarten Verheyen")
 st.write("Upload je stocklijst en catalogus om de gefilterde stocklijst te genereren.")
 
 # Bestand uploads
-stock_file = st.file_uploader("Upload de Stocklijst (Excel)", type=["xls", "xlsx"])
-catalog_file = st.file_uploader("Upload de Catalogus (CSV)", type=["csv"])
+stock_file = st.file_uploader("Upload de Stocklijst uit Mercis (Excel)", type=["xls", "xlsx"])
+catalog_file = st.file_uploader("Upload de Catalogus uit KMOShops (CSV)", type=["csv"])
 
 if stock_file and catalog_file:
     if st.button("Filter Stocklijst"):
@@ -41,7 +42,8 @@ if stock_file and catalog_file:
             filtered_df.to_excel(writer, index=False)
         output.seek(0)
         
-        # Huidige datum ophalen
+        # Zorg dat datetime correct gebruikt wordt
+        from datetime import datetime
         current_date = datetime.now().strftime("%Y-%m-%d")
         
         # Download knop tonen
