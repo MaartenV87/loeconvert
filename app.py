@@ -57,15 +57,8 @@ st.sidebar.info(
     """
 )
 
-# --- Functies voor inlezen en verwerken van de data ---
-
+# --- Functie om Excel in te lezen ---
 def read_excel_simple(file):
-    """
-    Lees een Excel-bestand dat mogelijk een foutieve styles.xml bevat.
-    Het bestand wordt als zip-archief geopend, waarbij in xl/styles.xml 'biltinId'
-    wordt vervangen door 'builtinId'. Daarna wordt het workbook in read-only modus
-    ingelezen (zonder stijlen).
-    """
     try:
         file_bytes = file.read()
         in_memory_file = BytesIO(file_bytes)
@@ -92,8 +85,8 @@ def read_excel_simple(file):
         st.error(f"Fout bij het inlezen van de Excel: {e}")
         return pd.DataFrame()
 
+# --- Functie voor het filteren van de data ---
 def filter_stock(stock_file, catalog_file, progress_callback=None):
-    # Stap 1: Inlezen van de stocklijst
     if progress_callback:
         progress_callback(10)
     stocklijst_df = read_excel_simple(stock_file)
@@ -101,7 +94,6 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
         st.error("De stocklijst is leeg of kan niet worden gelezen. Controleer of het bestand correct is opgeslagen.")
         return pd.DataFrame()
 
-    # Stap 2: Inlezen van de catalogus (voor de filtering)
     if progress_callback:
         progress_callback(30)
     try:
@@ -110,11 +102,9 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
         st.error(f"Fout bij het inlezen van de catalogus: {e}")
         return pd.DataFrame()
 
-    # Kolomnamen voor filtering
     stocklijst_col = "Code"      # Bijvoorbeeld: "Code" (of "EAN")
     catalogus_col = "product_sku"
     
-    # Stap 3: Converteren van kolommen naar string
     if progress_callback:
         progress_callback(50)
     try:
@@ -124,14 +114,12 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
         st.error(f"Vereiste kolom ontbreekt in de bestanden: {e}")
         return pd.DataFrame()
 
-    # Stap 4: Filteren van de stocklijst op basis van de catalogus
     try:
         filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
     except Exception as e:
         st.error(f"Fout bij het filteren van data: {e}")
         return pd.DataFrame()
 
-    # Stap 5: Samenvoegen en duplicaat verwijderen
     if progress_callback:
         progress_callback(70)
     try:
@@ -141,13 +129,11 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
             right_on=catalogus_col,
             how="left"
         )
-        # Verwijder de extra SKU-kolom (uit de catalogus)
         merged_df = merged_df.drop(columns=[catalogus_col])
     except Exception as e:
         st.error(f"Fout bij het samenvoegen van data: {e}")
         return pd.DataFrame()
 
-    # Stap 6: Hernoemen van kolommen en afronden
     if progress_callback:
         progress_callback(90)
     rename_map = {
@@ -161,9 +147,7 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
             return pd.DataFrame()
         merged_df = merged_df.rename(columns=rename_map)
         merged_df = merged_df[["product_sku", "product_quantity"]]
-        merged_df["product_quantity"] = pd.to_numeric(
-            merged_df["product_quantity"], errors="coerce"
-        ).fillna(0).astype(int)
+        merged_df["product_quantity"] = pd.to_numeric(merged_df["product_quantity"], errors="coerce").fillna(0).astype(int)
     except Exception as e:
         st.error(f"Fout bij het verwerken van de geëxporteerde data: {e}")
         return pd.DataFrame()
@@ -174,11 +158,9 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
 
 # --- Bestandsuploads in twee kolommen ---
 col1, col2 = st.columns(2)
-
 with col1:
     st.subheader("Stocklijst uit Mercis (Excel)")
     stock_file = st.file_uploader("Upload hier je Stocklijst", type=["xls", "xlsx"])
-
 with col2:
     st.subheader("Catalogus uit KMOShops (CSV)")
     catalog_file = st.file_uploader("Upload hier je Catalogus", type=["csv"])
@@ -212,43 +194,42 @@ if st.button("Filter Stocklijst"):
         
         # --- Overzicht van Verschillen ---
         try:
-            # Reset de pointer van catalog_file zodat de inhoud opnieuw gelezen kan worden
+            # Reset de pointer van catalog_file zodat deze opnieuw ingelezen kan worden
             catalog_file.seek(0)
-            # Probeer eerst de catalogus in te lezen met automatische delimiter detectie
             try:
                 catalogus_df_full = pd.read_csv(catalog_file, sep=None, engine="python")
             except Exception as e:
-                # Fallback: probeer met een komma
                 try:
                     catalogus_df_full = pd.read_csv(catalog_file, delimiter=',')
                 except Exception as e:
-                    # Fallback: probeer met een puntkomma
                     catalogus_df_full = pd.read_csv(catalog_file, delimiter=';')
             
-            # Zorg dat de kolom 'product_sku' als string is
             catalogus_df_full['product_sku'] = catalogus_df_full['product_sku'].astype(str)
             
-            # Als de kolom 'Omschrijving' niet bestaat, voeg deze toe (bijvoorbeeld als lege kolom of met een standaardtekst)
-            if 'Omschrijving' not in catalogus_df_full.columns:
-                catalogus_df_full['Omschrijving'] = "Geen omschrijving"
+            # Gebruik "product_name" als de productnaam; als deze niet bestaat, geef een standaardwaarde
+            if 'product_name' not in catalogus_df_full.columns:
+                catalogus_df_full['product_name'] = "Geen productnaam"
             
-            # Maak een kopie van de export en hernoem de stocklist-hoeveelheid naar 'Nieuw aantal'
+            # Maak een kopie van de export en hernoem de stocklijsthoeveelheid naar 'Nieuw aantal'
             filtered_export = filtered_df.copy().rename(columns={'product_quantity': 'Nieuw aantal'})
-            # Voeg de catalogus-informatie toe: 'Omschrijving' en 'product_quantity' als 'Vorig aantal'
+            
+            # Voeg de catalogus-informatie toe: 'product_name' als 'Productnaam' en 'product_quantity' als 'Vorig aantal'
             diff_df = pd.merge(filtered_export, 
-                               catalogus_df_full[['product_sku', 'Omschrijving', 'product_quantity']], 
+                               catalogus_df_full[['product_sku', 'product_name', 'product_quantity']], 
                                on='product_sku', how='left')
-            diff_df = diff_df.rename(columns={'product_quantity': 'Vorig aantal'})
+            diff_df = diff_df.rename(columns={'product_quantity': 'Vorig aantal', 'product_name': 'Productnaam'})
+            
+            # Zorg ervoor dat 'Vorig aantal' een geheel getal is
+            diff_df['Vorig aantal'] = pd.to_numeric(diff_df['Vorig aantal'], errors='coerce').fillna(0).astype(int)
+            
             # Bereken het verschil: (Nieuw aantal - Vorig aantal)
             diff_df['Verschil'] = diff_df['Nieuw aantal'] - diff_df['Vorig aantal']
             # Houd enkel producten met een verschil
             diff_df = diff_df[diff_df['Verschil'] != 0]
-            # Behoud de gewenste kolommen en herschik de volgorde
-            diff_df = diff_df[['Omschrijving', 'Vorig aantal', 'Nieuw aantal', 'Verschil']]
+            diff_df = diff_df[['Productnaam', 'Vorig aantal', 'Nieuw aantal', 'Verschil']]
             
             if not diff_df.empty:
                 st.markdown("### Overzicht van verschillen")
-                # Functie voor het kleuren van de 'Verschil'-kolom
                 def color_diff(val):
                     try:
                         if val > 0:
@@ -259,7 +240,9 @@ if st.button("Filter Stocklijst"):
                             return ''
                     except:
                         return ''
-                styled_diff = diff_df.style.applymap(color_diff, subset=['Verschil'])
+                styled_diff = diff_df.style.applymap(color_diff, subset=['Verschil']).set_table_styles(
+                    [{'selector': 'table', 'props': [('margin-left', 'auto'), ('margin-right', 'auto')]}]
+                )
                 st.markdown(styled_diff.to_html(), unsafe_allow_html=True)
             else:
                 st.info("Geen verschillen gevonden tussen de catalogus en de stocklijst.")
