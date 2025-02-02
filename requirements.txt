@@ -1,5 +1,3 @@
 openpyxl
 xlsxwriter
 pandas
-io
-zipfile
