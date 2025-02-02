@@ -101,7 +101,7 @@ def filter_stock(stock_file, catalog_file, progress_callback=None):
         st.error("De stocklijst is leeg of kan niet worden gelezen. Controleer of het bestand correct is opgeslagen.")
         return pd.DataFrame()
 
-    # Stap 2: Inlezen van de catalogus
+    # Stap 2: Inlezen van de catalogus (voor de filtering)
     if progress_callback:
         progress_callback(30)
     try:
@@ -210,12 +210,20 @@ if st.button("Filter Stocklijst"):
         st.markdown(download_link, unsafe_allow_html=True)
         st.success("De gefilterde stocklijst is succesvol gegenereerd!")
         
-        # --- Overzicht van verschillen ---
-        # Lees de catalogus opnieuw voor de benodigde extra kolommen. 
-        # (Verondersteld wordt dat de catalogus de kolommen 'product_sku', 'Omschrijving' en 'product_quantity' bevat)
+        # --- Overzicht van Verschillen ---
         try:
-            catalogus_df_full = pd.read_csv(catalog_file, sep=None, engine="python")
+            # Probeer eerst de catalogus in te lezen met automatische delimiter detectie
+            try:
+                catalogus_df_full = pd.read_csv(catalog_file, sep=None, engine="python")
+            except Exception as e:
+                # Fallback: probeer met een komma
+                try:
+                    catalogus_df_full = pd.read_csv(catalog_file, delimiter=',')
+                except Exception as e:
+                    # Fallback: probeer met een puntkomma
+                    catalogus_df_full = pd.read_csv(catalog_file, delimiter=';')
             catalogus_df_full['product_sku'] = catalogus_df_full['product_sku'].astype(str)
+            
             # Maak een kopie van de export en hernoem de stocklist-hoeveelheid naar 'Nieuw aantal'
             filtered_export = filtered_df.copy().rename(columns={'product_quantity': 'Nieuw aantal'})
             # Voeg de catalogus-informatie toe: 'Omschrijving' en 'product_quantity' als 'Vorig aantal'
