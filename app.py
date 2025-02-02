@@ -23,7 +23,7 @@ def filter_stock(stock_file, catalog_file):
     return filtered_stocklijst_df
 
 # Streamlit UI
-st.title("Stocklijst Filter Webapp")
+st.title("LOE Stocklijst Filter Webapp - Door Maarten Verheyen")
 
 st.write("Upload je stocklijst en catalogus om de gefilterde stocklijst te genereren.")
 
@@ -41,11 +41,14 @@ if stock_file and catalog_file:
             filtered_df.to_excel(writer, index=False)
         output.seek(0)
         
+        # Huidige datum ophalen
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        
         # Download knop tonen
         st.download_button(
             label="Download Gefilterde Stocklijst",
             data=output,
-            file_name="Filtered_Stocklijst.xlsx",
+            file_name=f"Gefilterde_Stocklijst_{current_date}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         
