@@ -1,27 +1,51 @@
 import streamlit as st
 import pandas as pd
 import io
+import zipfile
+from io import BytesIO
 from datetime import datetime
 from openpyxl import load_workbook
 
 def read_excel_simple(file):
     """
-    Lees een Excel-bestand in via openpyxl in read-only modus (zonder stijlen) 
-    om problemen met style parsing te vermijden.
+    Lees een Excel-bestand dat mogelijk een foutieve styles.xml bevat.
+    We openen het XLSX-bestand als een zip-archief, vervangen in xl/styles.xml 'biltinId'
+    door 'builtinId', en laden vervolgens het workbook in read-only modus (zonder stijlen).
     """
     try:
-        # Open het workbook in read-only en data-only modus
-        wb = load_workbook(file, read_only=True, data_only=True)
+        # Lees de gehele inhoud van het geüploade bestand als bytes
+        file_bytes = file.read()
+        # Maak een in-memory stream van de bytes
+        in_memory_file = BytesIO(file_bytes)
+        
+        # Open het XLSX-bestand als zip-archief
+        with zipfile.ZipFile(in_memory_file, 'r') as zin:
+            # Maak een nieuw in-memory zip-archief waarin we de (aangepaste) bestanden schrijven
+            out_buffer = BytesIO()
+            with zipfile.ZipFile(out_buffer, 'w') as zout:
+                # Loop door alle bestanden in het originele archive
+                for item in zin.infolist():
+                    content = zin.read(item.filename)
+                    # Als we het styles-bestand tegenkomen, vervang dan 'biltinId' door 'builtinId'
+                    if item.filename == 'xl/styles.xml':
+                        content = content.replace(b'biltinId', b'builtinId')
+                    zout.writestr(item, content)
+            # Zorg dat we aan het begin van de nieuwe stream staan
+            out_buffer.seek(0)
+        
+        # Laad het workbook vanuit het aangepaste archive in read-only en data-only modus
+        wb = load_workbook(out_buffer, read_only=True, data_only=True)
         ws = wb.active
 
-        # Haal alle waarden op uit het actieve werkblad
+        # Haal alle waarden op (de stijlen worden niet meegenomen)
         data = list(ws.values)
         if not data:
             st.error("Het Excel-bestand bevat geen data.")
             return pd.DataFrame()
 
-        # Veronderstel dat de eerste rij de kolomnamen bevat
-        header, values = data[0], data[1:]
+        # Veronderstel dat de eerste rij kolomnamen bevat
+        header = data[0]
+        values = data[1:]
         df = pd.DataFrame(values, columns=header)
         return df
     except Exception as e:
@@ -46,12 +70,12 @@ def filter_stock(stock_file, catalog_file):
         st.error(f"Fout bij het inlezen van de catalogus: {e}")
         return pd.DataFrame()
 
-    # Kolommen identificeren voor filtering
+    # Kolomnamen voor filtering (pas dit eventueel aan naar jouw data)
     stocklijst_col = "Code"  # Alternatief: "EAN"
     catalogus_col = "product_sku"
     
     try:
-        # Converteren naar string om mogelijke datatypeverschillen te voorkomen
+        # Zet de relevante kolommen om naar strings om datatypeverschillen te voorkomen
         stocklijst_df[stocklijst_col] = stocklijst_df[stocklijst_col].astype(str)
         catalogus_df[catalogus_col] = catalogus_df[catalogus_col].astype(str)
     except KeyError as e:
@@ -59,10 +83,10 @@ def filter_stock(stock_file, catalog_file):
         return pd.DataFrame()
 
     try:
-        # Filteren: Alleen rijen uit de stocklijst behouden die in de catalogus staan
+        # Filter de stocklijst: houd alleen rijen die ook in de catalogus voorkomen
         filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
 
-        # Samenvoegen van data (in dit voorbeeld enkel op de product_sku)
+        # Samenvoegen van de data (hier voeg je bijvoorbeeld extra informatie uit de catalogus toe)
         merged_df = filtered_stocklijst_df.merge(
             catalogus_df[[catalogus_col]],
             left_on=stocklijst_col,
@@ -73,25 +97,21 @@ def filter_stock(stock_file, catalog_file):
         st.error(f"Fout bij het filteren en samenvoegen van data: {e}")
         return pd.DataFrame()
 
-    # Kolommen hernoemen en filteren voor export
+    # Hernoem en filter kolommen voor de uiteindelijke export
     rename_map = {
         "Code": "product_sku",
         "# stock": "product_quantity"
     }
-
     try:
-        # Controleer of alle vereiste kolommen beschikbaar zijn
         missing_columns = [col for col in rename_map.keys() if col not in merged_df.columns]
         if missing_columns:
             st.error(f"De volgende vereiste kolommen ontbreken in de stocklijst: {missing_columns}")
             return pd.DataFrame()
 
         merged_df = merged_df.rename(columns=rename_map)
-
-        # Alleen gewenste kolommen behouden
         merged_df = merged_df[["product_sku", "product_quantity"]]
 
-        # product_quantity omzetten naar gehele getallen
+        # Zorg dat product_quantity een geheel getal is
         merged_df["product_quantity"] = pd.to_numeric(
             merged_df["product_quantity"], errors="coerce"
         ).fillna(0).astype(int)
@@ -113,9 +133,8 @@ if stock_file and catalog_file:
     if st.button("Filter Stocklijst"):
         with st.spinner("Bezig met verwerken..."):
             filtered_df = filter_stock(stock_file, catalog_file)
-
             if not filtered_df.empty:
-                # Omzetten naar CSV-bestand
+                # Zet de DataFrame om naar CSV
                 output = io.StringIO()
                 filtered_df.to_csv(output, index=False, sep=';')
                 output.seek(0)
@@ -130,5 +149,4 @@ if stock_file and catalog_file:
                     file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
                     mime="text/csv"
                 )
-
                 st.success("De gefilterde stocklijst is succesvol gegenereerd!")
