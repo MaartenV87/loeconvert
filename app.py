@@ -2,58 +2,105 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
+from openpyxl import load_workbook
+
+def read_protected_excel(file):
+    """
+    Probeer een beveiligd Excel-bestand in te lezen.
+    """
+    try:
+        # Probeer direct in te lezen
+        df = pd.read_excel(file, engine="openpyxl")
+        return df
+    except Exception as e:
+        try:
+            # Als direct lezen mislukt, probeer handmatig laden
+            wb = load_workbook(file, read_only=True, data_only=True)
+            sheet = wb.active
+
+            # Lees de data handmatig in
+            data = sheet.values
+            columns = next(data)  # Haal de kolomnamen uit de eerste rij
+            df = pd.DataFrame(data, columns=columns)
+            return df
+        except Exception as inner_e:
+            st.error(f"Fout bij het inlezen van de stocklijst: {inner_e}")
+            return pd.DataFrame()
 
 def filter_stock(stock_file, catalog_file):
-    # Stocklijst inlezen met expliciete engine
-    stocklijst_df = pd.read_excel(stock_file, engine="openpyxl")
-    
-    # Catalogus inlezen met automatische delimiter detectie
-    catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
-    
+    try:
+        # Stocklijst inlezen
+        stocklijst_df = read_protected_excel(stock_file)
+        if stocklijst_df.empty:
+            st.error("De stocklijst is leeg of kan niet worden gelezen.")
+            return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Fout bij het verwerken van de stocklijst: {e}")
+        return pd.DataFrame()
+
+    try:
+        # Catalogus inlezen met automatische delimiter detectie
+        catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
+    except Exception as e:
+        st.error(f"Fout bij het inlezen van de catalogus: {e}")
+        return pd.DataFrame()
+
     # Kolommen identificeren voor filtering
     stocklijst_col = "Code"  # Alternatief: "EAN"
     catalogus_col = "product_sku"
     catalogus_name_col = "product_name"
-    
-    # Converteren naar string om mogelijke datatypeverschillen te voorkomen
-    stocklijst_df[stocklijst_col] = stocklijst_df[stocklijst_col].astype(str)
-    catalogus_df[catalogus_col] = catalogus_df[catalogus_col].astype(str)
-    
-    # Filteren: Alleen rijen uit de stocklijst behouden die in de catalogus staan
-    filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
-    
-    # Toevoegen van product_name vanuit de catalogus
-    merged_df = filtered_stocklijst_df.merge(
-        catalogus_df[[catalogus_col, catalogus_name_col]],
-        left_on=stocklijst_col,
-        right_on=catalogus_col,
-        how="left"
-    )
-    
+
+    try:
+        # Converteren naar string om mogelijke datatypeverschillen te voorkomen
+        stocklijst_df[stocklijst_col] = stocklijst_df[stocklijst_col].astype(str)
+        catalogus_df[catalogus_col] = catalogus_df[catalogus_col].astype(str)
+    except KeyError as e:
+        st.error(f"Vereiste kolom ontbreekt in de bestanden: {e}")
+        return pd.DataFrame()
+
+    try:
+        # Filteren: Alleen rijen uit de stocklijst behouden die in de catalogus staan
+        filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
+
+        # Toevoegen van product_name vanuit de catalogus
+        merged_df = filtered_stocklijst_df.merge(
+            catalogus_df[[catalogus_col, catalogus_name_col]],
+            left_on=stocklijst_col,
+            right_on=catalogus_col,
+            how="left"
+        )
+    except Exception as e:
+        st.error(f"Fout bij het filteren en samenvoegen van data: {e}")
+        return pd.DataFrame()
+
     # Kolommen hernoemen en filteren voor export
     rename_map = {
         "Code": "product_sku",
         "# stock": "product_quantity"
     }
-    
-    # Controleer of alle vereiste kolommen beschikbaar zijn
-    missing_columns = [col for col in rename_map.keys() if col not in merged_df.columns]
-    if missing_columns:
-        st.error(f"De volgende vereiste kolommen ontbreken in de stocklijst: {missing_columns}")
-        return pd.DataFrame()  # Lege DataFrame retourneren als er kolommen ontbreken
-    
-    merged_df = merged_df.rename(columns=rename_map)
-    
-    # Alleen gewenste kolommen behouden
-    merged_df = merged_df[[
-        "product_name", "product_sku", "product_quantity"
-    ]]
 
-    # product_quantity omzetten naar gehele getallen
-    merged_df["product_quantity"] = pd.to_numeric(
-        merged_df["product_quantity"], errors="coerce"
-    ).fillna(0).astype(int)
-    
+    try:
+        # Controleer of alle vereiste kolommen beschikbaar zijn
+        missing_columns = [col for col in rename_map.keys() if col not in merged_df.columns]
+        if missing_columns:
+            st.error(f"De volgende vereiste kolommen ontbreken in de stocklijst: {missing_columns}")
+            return pd.DataFrame()
+
+        merged_df = merged_df.rename(columns=rename_map)
+
+        # Alleen gewenste kolommen behouden
+        merged_df = merged_df[[
+            "product_name", "product_sku", "product_quantity"
+        ]]
+
+        # product_quantity omzetten naar gehele getallen
+        merged_df["product_quantity"] = pd.to_numeric(
+            merged_df["product_quantity"], errors="coerce"
+        ).fillna(0).astype(int)
+    except Exception as e:
+        st.error(f"Fout bij het verwerken van de geëxporteerde data: {e}")
+        return pd.DataFrame()
+
     return merged_df
 
 # Streamlit UI
@@ -69,17 +116,17 @@ if stock_file and catalog_file:
     if st.button("Filter Stocklijst"):
         with st.spinner("Bezig met verwerken..."):
             filtered_df = filter_stock(stock_file, catalog_file)
-            
+
             if not filtered_df.empty:
                 # Omzetten naar CSV-bestand
                 output = io.StringIO()
                 filtered_df.to_csv(output, index=False, sep=';')
                 output.seek(0)
-                
+
                 # Zorg dat datetime correct gebruikt wordt
                 from datetime import datetime
                 current_date = datetime.now().strftime("%Y-%m-%d")
-                
+
                 # Download knop tonen
                 st.download_button(
                     label="Download Gefilterde Stocklijst",
@@ -87,5 +134,5 @@ if stock_file and catalog_file:
                     file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
                     mime="text/csv"
                 )
-                
+
                 st.success("De gefilterde stocklijst is succesvol gegenereerd!")
