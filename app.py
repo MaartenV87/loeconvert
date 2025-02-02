@@ -20,7 +20,7 @@ st.markdown("""
     .sidebar .sidebar-content {
         background: #ffffff;
     }
-    /* Banner en header styling */
+    /* Header styling (alleen tekst, geen bannerafbeelding) */
     .header-banner {
         text-align: center;
         padding: 20px 0;
@@ -35,19 +35,15 @@ st.markdown("""
         color: #555555;
         margin: 0;
     }
-    /* Centraal uitgelijnde knoppen */
-    .centered-button {
+    /* Centraal uitgelijnde knop voor st.button */
+    .centered-button > div.stButton {
         display: flex;
         justify-content: center;
-        margin-top: 20px;
-        margin-bottom: 20px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Banner ---
-# (Pas de URL hieronder aan naar een eigen afbeelding indien gewenst)
-st.image("https://via.placeholder.com/1200x300?text=LOE+Stocklijst+Filter", use_container_width=True)
+# --- Header (alleen tekst) ---
 st.markdown("<div class='header-banner'><h1>LOE Stocklijst Filter App</h1><h3>Gemaakt door Maarten Verheyen</h3></div>", unsafe_allow_html=True)
 
 # --- Sidebar met instructies ---
@@ -61,7 +57,7 @@ st.sidebar.info(
     """
 )
 
-# --- Functies voor inlezen en verwerken van de data ---
+# --- Functies voor het inlezen en verwerken van de data ---
 
 def read_excel_simple(file):
     """
@@ -187,32 +183,29 @@ with col2:
     st.subheader("Catalogus uit KMOShops (CSV)")
     catalog_file = st.file_uploader("Upload hier je Catalogus", type=["csv"])
 
-# --- Verwerking en download ---
-if stock_file and catalog_file:
-    # Centreer de Filter-knop met behulp van drie kolommen (button in de middelste kolom)
-    cols = st.columns(3)
-    with cols[1]:
-        if st.button("Filter Stocklijst"):
-            progress_bar = st.progress(0)
-            def progress_callback(percentage):
-                progress_bar.progress(percentage)
-            with st.spinner("Bezig met verwerken..."):
-                filtered_df = filter_stock(stock_file, catalog_file, progress_callback)
-            if not filtered_df.empty:
-                output = io.StringIO()
-                filtered_df.to_csv(output, index=False, sep=';')
-                output.seek(0)
-                current_date = datetime.now().strftime("%Y-%m-%d")
-                csv_data = output.getvalue()
-                # Base64 encode van de CSV-data
-                b64 = base64.b64encode(csv_data.encode()).decode()
-                download_link = f"""
-                <div style="text-align: center; margin-top: 20px;">
-                    <a href="data:file/csv;base64,{b64}" download="Gefilterde_Stocklijst_{current_date}.csv"
-                    style="background-color: #28a745; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; font-weight: bold;">
-                        Download Gefilterde Stocklijst
-                    </a>
-                </div>
-                """
-                st.markdown(download_link, unsafe_allow_html=True)
-                st.success("De gefilterde stocklijst is succesvol gegenereerd!")
+# --- Centraal geplaatste Filter-knop ---
+st.markdown('<div class="centered-button">', unsafe_allow_html=True)
+if st.button("Filter Stocklijst"):
+    progress_bar = st.progress(0)
+    def progress_callback(percentage):
+        progress_bar.progress(percentage)
+    with st.spinner("Bezig met verwerken..."):
+        filtered_df = filter_stock(stock_file, catalog_file, progress_callback)
+    if not filtered_df.empty:
+        output = io.StringIO()
+        filtered_df.to_csv(output, index=False, sep=';')
+        output.seek(0)
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        csv_data = output.getvalue()
+        b64 = base64.b64encode(csv_data.encode()).decode()
+        download_link = f"""
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="data:file/csv;base64,{b64}" download="Gefilterde_Stocklijst_{current_date}.csv"
+                style="background-color: #28a745; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; font-weight: bold;">
+                    Download Gefilterde Stocklijst
+                </a>
+            </div>
+            """
+        st.markdown(download_link, unsafe_allow_html=True)
+        st.success("De gefilterde stocklijst is succesvol gegenereerd!")
+st.markdown('</div>', unsafe_allow_html=True)
