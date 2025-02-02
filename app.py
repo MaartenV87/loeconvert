@@ -43,6 +43,11 @@ def filter_stock(stock_file, catalog_file):
     filtered_stocklijst_df = filtered_stocklijst_df[[
         "product_name", "product_sku", "product_quantity"
     ]]
+
+    # product_quantity omzetten naar gehele getallen
+    filtered_stocklijst_df["product_quantity"] = pd.to_numeric(
+        filtered_stocklijst_df["product_quantity"], errors="coerce"
+    ).fillna(0).astype(int)
     
     return filtered_stocklijst_df
 
