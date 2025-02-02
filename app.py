@@ -4,45 +4,44 @@ import io
 from datetime import datetime
 from openpyxl import load_workbook
 
-def read_protected_excel(file):
+def excel_to_csv(file):
     """
-    Probeer een beveiligd Excel-bestand in te lezen en negeer stijlinformatie.
+    Converteer een Excel-bestand naar CSV.
     """
     try:
-        # Probeer direct in te lezen zonder stijlen
-        df = pd.read_excel(file, engine="openpyxl", skiprows=0)
-        return df
+        df = pd.read_excel(file, engine="openpyxl")
+        output = io.StringIO()
+        df.to_csv(output, index=False, sep=';')
+        output.seek(0)
+        return output
     except Exception as e:
-        try:
-            # Als direct lezen mislukt, probeer handmatig laden zonder stijlen
-            wb = load_workbook(file, read_only=True, data_only=True)
-            sheet = wb.active
+        st.error(f"Fout bij het converteren van Excel naar CSV: {e}")
+        return None
 
-            # Lees de data handmatig in
-            data = sheet.values
-            columns = next(data)  # Haal de kolomnamen uit de eerste rij
-            df = pd.DataFrame(data, columns=columns)
-            return df
-        except Exception as inner_e:
-            st.error("Fout bij het inlezen van de stocklijst: Mogelijk bevat het bestand corrupte of complexe stijlen.")
-            st.error(f"Technische foutmelding: {inner_e}")
-            st.warning("Probeer het bestand opnieuw op te slaan in Excel zonder opmaak en upload het opnieuw.")
-            return pd.DataFrame()
-
-def filter_stock(stock_file, catalog_file):
+def read_catalog(file):
+    """
+    Lees de catalogus CSV in.
+    """
     try:
-        # Stocklijst inlezen
-        stocklijst_df = read_protected_excel(stock_file)
+        return pd.read_csv(file, sep=None, engine="python")
+    except Exception as e:
+        st.error(f"Fout bij het inlezen van de catalogus: {e}")
+        return pd.DataFrame()
+
+def filter_stock(stock_csv, catalog_file):
+    try:
+        # Stock CSV inlezen
+        stocklijst_df = pd.read_csv(stock_csv, sep=';')
         if stocklijst_df.empty:
             st.error("De stocklijst is leeg of kan niet worden gelezen. Controleer of het bestand correct is opgeslagen.")
             return pd.DataFrame()
     except Exception as e:
-        st.error(f"Fout bij het verwerken van de stocklijst: {e}")
+        st.error(f"Fout bij het inlezen van de geconverteerde stocklijst: {e}")
         return pd.DataFrame()
 
     try:
-        # Catalogus inlezen met automatische delimiter detectie
-        catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
+        # Catalogus inlezen
+        catalogus_df = read_catalog(catalog_file)
     except Exception as e:
         st.error(f"Fout bij het inlezen van de catalogus: {e}")
         return pd.DataFrame()
@@ -117,24 +116,29 @@ catalog_file = st.file_uploader("Upload de Catalogus uit KMOShops (CSV)", type=[
 if stock_file and catalog_file:
     if st.button("Filter Stocklijst"):
         with st.spinner("Bezig met verwerken..."):
-            filtered_df = filter_stock(stock_file, catalog_file)
+            # Converteer Excel naar CSV
+            stock_csv = excel_to_csv(stock_file)
+            if stock_csv is None:
+                st.error("De stocklijst kon niet worden geconverteerd naar CSV.")
+            else:
+                filtered_df = filter_stock(stock_csv, catalog_file)
 
-            if not filtered_df.empty:
-                # Omzetten naar CSV-bestand
-                output = io.StringIO()
-                filtered_df.to_csv(output, index=False, sep=';')
-                output.seek(0)
+                if not filtered_df.empty:
+                    # Omzetten naar CSV-bestand
+                    output = io.StringIO()
+                    filtered_df.to_csv(output, index=False, sep=';')
+                    output.seek(0)
 
-                # Zorg dat datetime correct gebruikt wordt
-                from datetime import datetime
-                current_date = datetime.now().strftime("%Y-%m-%d")
+                    # Zorg dat datetime correct gebruikt wordt
+                    from datetime import datetime
+                    current_date = datetime.now().strftime("%Y-%m-%d")
 
-                # Download knop tonen
-                st.download_button(
-                    label="Download Gefilterde Stocklijst",
-                    data=output.getvalue(),
-                    file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
-                    mime="text/csv"
-                )
+                    # Download knop tonen
+                    st.download_button(
+                        label="Download Gefilterde Stocklijst",
+                        data=output.getvalue(),
+                        file_name=f"Gefilterde_Stocklijst_{current_date}.csv",
+                        mime="text/csv"
+                    )
 
-                st.success("De gefilterde stocklijst is succesvol gegenereerd!")
+                    st.success("De gefilterde stocklijst is succesvol gegenereerd!")
