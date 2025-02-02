@@ -26,6 +26,7 @@ def read_protected_excel(file):
         except Exception as inner_e:
             st.error("Fout bij het inlezen van de stocklijst: Mogelijk bevat het bestand corrupte of complexe stijlen.")
             st.error(f"Technische foutmelding: {inner_e}")
+            st.warning("Probeer het bestand opnieuw op te slaan in Excel zonder opmaak en upload het opnieuw.")
             return pd.DataFrame()
 
 def filter_stock(stock_file, catalog_file):
