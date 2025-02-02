@@ -54,7 +54,7 @@ st.sidebar.info(
     **Stap 2:** Upload de *Catalogus uit KMOShops (CSV)* in de rechterkolom.  
     **Stap 3:** Klik op **Filter Stocklijst** om de verwerking te starten.  
     **Stap 4:** Download de gefilterde stocklijst en bekijk het overzicht van wijzigingen in de stock onderaan.  
-    **Vragen over deze webapp?** Contacteer mij via [verheyen.maarten87@gmail.com](mailto:verheyen.maarten87@gmail.com)
+    **Vragen over deze webapp?** Contacteer [mij](mailto:verheyen.maarten87@gmail.com).
     """
 )
 
