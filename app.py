@@ -4,8 +4,8 @@ import io
 from datetime import datetime
 
 def filter_stock(stock_file, catalog_file):
-    # Stocklijst inlezen
-    stocklijst_df = pd.read_excel(stock_file)
+    # Stocklijst inlezen met expliciete engine
+    stocklijst_df = pd.read_excel(stock_file, engine="openpyxl")
     
     # Catalogus inlezen met automatische delimiter detectie
     catalogus_df = pd.read_csv(catalog_file, sep=None, engine="python")
