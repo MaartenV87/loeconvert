@@ -21,6 +21,23 @@ def filter_stock(stock_file, catalog_file):
     # Filteren: Alleen rijen uit de stocklijst behouden die in de catalogus staan
     filtered_stocklijst_df = stocklijst_df[stocklijst_df[stocklijst_col].isin(catalogus_df[catalogus_col])]
     
+    # Kolommen hernoemen en filteren voor export
+    filtered_stocklijst_df = filtered_stocklijst_df.rename(columns={
+        "Omschrijving": "product_name",
+        "Code": "product_sku",
+        "Verk. pr. \n€ excl.": "product_price",
+        "product_weight": "product_weight",
+        "product_description": "product_description"
+    })
+    
+    # Alleen gewenste kolommen behouden
+    filtered_stocklijst_df = filtered_stocklijst_df[[
+        "product_name", "product_sku", "product_price", "product_weight", "product_description"
+    ]]
+    
+    # "type" kolom toevoegen met vaste waarde "product"
+    filtered_stocklijst_df.insert(0, "type", "product")
+    
     return filtered_stocklijst_df
 
 # Streamlit UI
